@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "[SrcToA2L]构建并调试",
+            "type": "cppdbg",
+            "request": "launch",
+            "preLaunchTask": "project_build_task", // 预构建脚本
+            "program": "${workspaceFolder}\\Build\\SrcToA2L.exe", // 调试目标
+            "args": [ // 附加参数
+                ".\\Test\\typedef.h",
+                ".\\Inc\\Type_Descriptions.hpp",
+                ".\\Test\\input.c",
+                "-r",
+                ".\\Test\\PVER.a2l",
+                "-m",
+                ".\\Test\\PVER.map",
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}", // 工作目录
+            "environment": [],
+            // "console": "externalTerminal",
+        }
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "tasks": [
+        {
+            "label": "project_build_task", //定义的Task标签
+            "type": "shell", //Task执行的类型
+            "options": {
+                "cwd": "${workspaceFolder}" // 工作目录
+            },
+            "command": "make", //运行的命令
+            "args": [
+                "-j4" // 附加参数
+            ],
+        }
+    ],
+    "version": "2.0.0"
+}
