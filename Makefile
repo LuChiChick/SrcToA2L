@@ -97,6 +97,9 @@ endif
 # C++编译选项
 CXXFLAGS = -lstdc++ $(CFLAGS:$(C_STD)=$(CXX_STD)) $(CXX_DEFS) $(CXX_INCLUDES)
 
+# 链接器选项
+LDFLAGS = -Wl,-Map,$(BUILD_DIR)/$(TARGET_FILE_NAME).map
+
 # C目标文件目录关联
 OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
 vpath %.c $(sort $(dir $(C_SOURCES)))
@@ -152,6 +155,7 @@ release:$(BUILD_DIR) $(RELEASE_DIR)
 	powershell rm $(BUILD_DIR)/*.o
 	powershell rm $(BUILD_DIR)/*.d
 	powershell rm $(BUILD_DIR)/*.lst
+	powershell rm $(BUILD_DIR)/*.map
 
 # 依赖关系
 -include $(wildcard $(BUILD_DIR)/*.d)
