@@ -1,34 +1,33 @@
 #ifndef __CONFIG_HPP__
 #define __CONFIG_HPP__
 
-#define VARIABLE_NAME_LENGTH_MAX 100
-#define ELEMENT_NAME_LENGTH_MAX 100
-#define TYPE_NAME_LENGTH_MAX 100
+#define ADDR_ALIGNMENT_SIZE 4 // 地址对齐方式
 
-#define A2L_TYPE_STR_LENGTH_MAX 100
-#define A2L_LIMIT_STR_LENGTH_MAX 100
+#define VARIABLE_NAME_STR_LENGTH_MAX 100 // 名称字符串最大长度
 
-#define SEGMENT_BUFF_LENGTH 5000
+#define A2L_TYPE_STR_LENGTH_MAX 100  // A2L类型字符串最大长度
+#define A2L_LIMIT_STR_LENGTH_MAX 100 // A2L限制字符串最大长度
+
+#define SEGMENT_BUFF_LENGTH 5000 // 段缓冲区长度
 
 // 输出文件默认前缀
-#define OUTPUT_A2L_DEFAULT_PREFIX "[NEW]"
+#define OUTPUT_A2L_PREFIX "[NEW]"
 // 中间件尾缀
 #define OUTPUT_MIDDLEWARE_SUFFIX ".middleware.txt"
+// 中间件默认名称
+#define OUTPUT_DEFAULT_MIDDLEWARE_FILE_NAME "Middleware.txt"
 
 // 相关识别串
-const char measurement_begin[] = "/*Start_Measurements*/";
-const char measurement_end[] = "/*End_Measurements*/";
-const char calibration_begin[] = "/*Start_Calibration*/";
-const char calibration_end[] = "/*End_Calibration*/";
-const char typedef_begin[] = "/*Start_TypeDef*/";
-const char typedef_end[] = "/*End_TypeDef*/";
+#define START_OF_MEASURMENT_PATTERN_STR "/*start_of_measurements*/"
+#define END_OF_MEASURMENT_PATTERN_STR "/*end_of_measurements*/"
+#define START_OF_CALIBRATION_PATTERN_STR "/*start_of_calibrations*/"
+#define END_OF_CALIBRATION_PATTERN_STR "/*end_of_calibrations*/"
 
-const char a2l_module_end[] = "/end MODULE";
+// A2L 插入识别串
+#define A2L_INSERT_PATTERN_STR "/end MODULE"
 
 // 段输出标识串
-const char auto_generated_measurement_start[] = "\r\n/***********   Start of auto generated measurement blocks    ***********/\r\n\r\n";
-const char auto_generated_measurement_end[] = "\r\n/***********   End of auto generated measurement blocks    ***********/\r\n\r\n";
-const char auto_generated_calibration_start[] = "\r\n/***********   Start of auto generated calibration blocks    ***********/\r\n\r\n";
-const char auto_generated_calibration_end[] = "\r\n/***********   End of auto generated calibration blocks    ***********/\r\n\r\n";
+#define START_OF_GENERATED_PATTERN_STR "/***********   start of SrcToA2L generated blocks    ***********/"
+#define END_OF_GENERATED_PATTERN_STR "/***********   end of SrcToA2L generated blocks    ***********/"
 
 #endif

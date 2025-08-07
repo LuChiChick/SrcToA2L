@@ -1,965 +1,862 @@
+#include "Config.hpp"
 #include "Core_Functions.hpp"
 #include "Tool_Functions.hpp"
-#include "Config.hpp"
+#include "Global_Variables.hpp"
 
 extern "C"
 {
 #include "stdio.h"
 #include "string.h"
+#include "ctype.h"
 #include "stdlib.h"
 }
 
 // 参数解析
 void solve_args(int argc, char *argv[])
 {
-    // 处理输入部分
-    {
-        const char *reference_A2L_name_str = nullptr; // 参考文件名
-        const char *output_name = nullptr;            // 输出文件名
+    // 文件名指针记录
+    const char *p_reference_file_name = nullptr;
+    const char *p_map_file_name = nullptr;
 
-        // 循环处理指令
-        for (int count = 1; count < argc; count++)
+    // 遍历命令参数
+    for (int count = 1; count < argc; count++)
+    {
+        // 是指令行
+        if (argv[count][0] == '-')
         {
-            // 匹配到参考a2l文件
+
+            // -r 参考A2L输入
             if (!strcmp(argv[count], "-r"))
             {
-                if (count + 1 >= argc)
-                {
-                    print_log(LOG_FAILURE, "No reference .a2l file input.\n");
+                // 错误输入处理
+                if (count + 1 == argc)
                     break;
-                }
+                if (argv[count + 1][0] == '-')
+                    continue;
+
+                // 已经打开了一个参考文件
+                if (input_reference_A2L_file != nullptr)
+                    log_printf(LOG_WARN, "Only single .a2l reference file supported,last will be use as input.");
+
+                // 尝试打开文件
                 input_reference_A2L_file = fopen(argv[count + 1], "rb");
                 if (input_reference_A2L_file == nullptr)
-                {
-                    print_log(LOG_FAILURE, "Input reference .a2l file <%s> open failed.\n", argv[count + 1]);
-                    break;
-                }
-
-                // 获取参考文件文件名
-                reference_A2L_name_str = argv[count + 1];
-
-                print_log(LOG_SUCCESS, "%-31s %s\n", "Input reference .a2l file:", argv[count + 1]);
-                count++;
-                continue;
-            }
-
-            // 匹配到链接map文件
-            else if (!strcmp(argv[count], "-l"))
-            {
-                if (count + 1 >= argc)
-                    break;
-                input_map_file = fopen(argv[count + 1], "rb");
-                if (input_map_file == nullptr)
-                {
-                    print_log(LOG_FAILURE, "Input link file <%s> open failed.\n", argv[count + 1]);
-                    break;
-                }
-
-                print_log(LOG_SUCCESS, "%-31s %s\n", "Input link .map file:", argv[count + 1]);
-                count++;
-                continue;
-            }
-
-            // 匹配到自定义输出文件名
-            else if (!strcmp(argv[count], "-o"))
-            {
-                if (count + 1 >= argc)
-                    break;
-                output_name = argv[count + 1];
-                print_log(LOG_SUCCESS, "%-31s %s\n", "Set output filename:", argv[count + 1]);
-                count++;
-                continue;
-            }
-
-            // 其它输入作为源文件输入
-            print_log(LOG_SUCCESS, "%-31s %s\n", "Input source filename:", argv[count]);
-
-            // 处理源文件链表
-            {
-                static file_node *target_node = nullptr;
-                if (source_file_list_head == nullptr)
-                {
-                    source_file_list_head = (file_node *)malloc(sizeof(file_node));
-                    source_file_list_head->file_name_str = nullptr;
-                    source_file_list_head->p_next = nullptr;
-                    target_node = source_file_list_head;
-                }
+                    log_printf(LOG_FAILURE, "Reference file \"%s\" open failed.", argv[count + 1]);
                 else
                 {
-                    target_node->p_next = (file_node *)malloc(sizeof(file_node));
-                    target_node = target_node->p_next;
-                    target_node->file_name_str = nullptr;
-                    target_node->p_next = nullptr;
+                    log_printf(LOG_SUCCESS, "Reference file \"%s\" open succeed.", argv[count + 1]);
+                    p_reference_file_name = argv[count + 1];
                 }
-
-                // 记录文件名
-                target_node->file_name_str = argv[count];
+                count++;
+                continue;
             }
+
+            // -m 链接map输入
+            if (!strcmp(argv[count], "-m"))
+            {
+                // 错误输入处理
+                if (count + 1 == argc)
+                    break;
+                if (argv[count + 1][0] == '-')
+                    continue;
+
+                // 已经打开了一个链接文件
+                if (input_map_file != nullptr)
+                    log_printf(LOG_WARN, "Only single .map file supported,last will be use as input.");
+
+                // 尝试打开文件
+                input_map_file = fopen(argv[count + 1], "rb");
+                if (input_map_file == nullptr)
+                    log_printf(LOG_FAILURE, "Map file \"%s\" open failed.", argv[count + 1]);
+                else
+                {
+                    log_printf(LOG_SUCCESS, "Map file \"%s\" open succeed.", argv[count + 1]);
+                    p_map_file_name = argv[count + 1];
+                }
+                count++;
+                continue;
+            }
+
+            log_printf(LOG_WARN, "Unknown argument \"%s\".", argv[count]);
+            continue;
         }
 
-        // 检查文件列表状态
-        if (source_file_list_head == nullptr)
+        // 其余的作为源文件输入
         {
-            print_log(LOG_FAILURE, "No source file input.\n");
-            free(source_file_list_head);
-            fcloseall();
-            exit(0);
+            // 排查重复文件
+            bool is_file_duplicated = false;
+            for (file_node *p_file_node = source_and_header_file_list_head; p_file_node != nullptr; p_file_node = p_file_node->p_next)
+            {
+                if (!strcmp(argv[count], p_file_node->file_name_str))
+                {
+                    is_file_duplicated = true;
+                    log_printf(LOG_WARN, "Source or header file \"%s\" duplicated.", argv[count]);
+                    break;
+                }
+            }
+            if (is_file_duplicated)
+                continue;
+
+            // 检测文件是否存在
+            FILE *target_file = fopen(argv[count], "rb");
+            if (target_file == nullptr)
+            {
+                log_printf(LOG_FAILURE, "Source or header file \"%s\" open failed.", argv[count]);
+                continue;
+            }
+
+            // 成功打开文件
+            static file_node *target_file_node = nullptr;
+
+            // 开辟新的空间
+            if (source_and_header_file_list_head == nullptr)
+            {
+                source_and_header_file_list_head = (file_node *)malloc(sizeof(file_node));
+                target_file_node = source_and_header_file_list_head;
+            }
+            else
+            {
+                target_file_node->p_next = (file_node *)malloc(sizeof(file_node));
+                target_file_node = target_file_node->p_next;
+            }
+
+            // 记录文件链表
+            target_file_node->file_name_str = argv[count];
+            target_file_node->p_next = nullptr;
+
+            // 关闭临时的文件指针
+            fclose(target_file);
+
+            // 日志
+            log_printf(LOG_SUCCESS, "Source or header file \"%s\" open succeed.", argv[count]);
+        }
+    }
+
+    // 没有任何文件输入
+    if (source_and_header_file_list_head == nullptr)
+    {
+        log_printf(LOG_FAILURE, "No source or header file input.");
+        // 退出并返回错误状态
+        clean_and_exit(-1);
+    }
+
+    // 无链接map文件时
+    if (input_map_file == nullptr)
+        log_printf(LOG_WARN, "No .map file input,address will be set to 0x00000000");
+
+    // 无参考A2L文件时
+    if (input_reference_A2L_file == nullptr)
+        log_printf(LOG_WARN, "No .a2l reference file input,only middleware will be generated.");
+
+    // 拼接输出部分字符串
+    char *output_file_name = nullptr;
+    if (p_reference_file_name != nullptr)
+    {
+        // 分配空间
+        output_file_name = (char *)malloc(strlen(p_reference_file_name) + strlen(OUTPUT_A2L_PREFIX) + 1);
+        // 获取路径部分长度和不带路径的文件名起始位置
+        int path_length = strlen(p_reference_file_name);
+        const char *file_name_no_dir = p_reference_file_name + path_length - 1;
+        // 遍历指针没有回到起始位置且没有遇到正反斜杠
+        while (file_name_no_dir + 1 != p_reference_file_name && *file_name_no_dir != '\\' && *file_name_no_dir != '/')
+        {
+            path_length--;
+            file_name_no_dir--;
+        }
+        file_name_no_dir++;
+
+        // 开始拼接
+        for (int count = 0; count < path_length; count++)
+            output_file_name[count] = p_reference_file_name[count];
+        sprintf(output_file_name + path_length, "%s%s", OUTPUT_A2L_PREFIX, file_name_no_dir);
+    }
+
+    // 输出工作流
+    {
+        printf("\n");
+        log_printf(LOG_INFO, "Workflow details:");
+        printf("                              ├─Source or header files:\n");
+
+        // 遍历文件链表
+        file_node *p_file = source_and_header_file_list_head;
+        while (p_file != nullptr)
+        {
+            if (p_file->p_next != nullptr)
+                printf("                              │     ├─%s\n", p_file->file_name_str);
+            else
+                printf("                              │     └─%s\n", p_file->file_name_str);
+
+            p_file = p_file->p_next;
         }
 
-        // 检查参考文件输入文件状态
-        if (input_reference_A2L_file == nullptr)
-        {
-            fcloseall();
-            exit(0);
-        }
+        printf("                              ├─Reference file:\n");
+        if (p_reference_file_name == nullptr)
+            printf("                              │     └─(NULL)\n");
+        else
+            printf("                              │     └─%s\n", p_reference_file_name);
 
-        // 处理输出文件名称
-        if (output_name != nullptr)
+        printf("                              ├─Map file:\n");
+        if (p_map_file_name == nullptr)
+            printf("                              │     └─(NULL)\n");
+        else
+            printf("                              │     └─%s\n", p_map_file_name);
+
+        printf("                              ├─Merged output file:\n");
+        if (p_reference_file_name == nullptr)
+            printf("                              │     └─(NULL)\n");
+        else
+            printf("                              │     └─%s\n", output_file_name);
+
+        printf("                              └─Middleware file:\n");
+        if (p_reference_file_name == nullptr)
+            printf("                                    └─.\\%s\n", OUTPUT_DEFAULT_MIDDLEWARE_FILE_NAME);
+        else
+            printf("                                    └─%s%s\n\n", output_file_name, OUTPUT_MIDDLEWARE_SUFFIX);
+    }
+
+    // 打开输出文件
+    {
+        // 参考文件存在时
+        if (p_reference_file_name != nullptr)
         {
-            output_target_A2L_file = fopen(output_name, "wb+");
-            char *buff = (char *)malloc(strlen(output_name) + strlen(OUTPUT_MIDDLEWARE_SUFFIX) + 1);
-            sprintf(buff, "%s%s", output_name, OUTPUT_MIDDLEWARE_SUFFIX);
+            // 打开合并输出文件
+            output_target_A2L_file = fopen(output_file_name, "wb");
+            if (output_target_A2L_file == nullptr)
+            {
+                log_printf(LOG_FAILURE, "Merged output file \"%s\" create failed.", output_file_name);
+                free(output_file_name);
+                clean_and_exit(-1);
+            }
+            else
+                log_printf(LOG_SUCCESS, "Merged output file \"%s\" create succeed.", output_file_name);
+
+            // 打开中间件
+            char *buff = (char *)malloc(strlen(output_file_name) + strlen(OUTPUT_MIDDLEWARE_SUFFIX) + 1);
+            sprintf(buff, "%s%s", output_file_name, OUTPUT_MIDDLEWARE_SUFFIX);
             output_middleware_file = fopen(buff, "wb+");
+
+            if (output_middleware_file == nullptr)
+            {
+                log_printf(LOG_FAILURE, "Middleware output file \"%s\" create failed.", buff);
+                free(output_file_name);
+                free(buff);
+                clean_and_exit(-1);
+            }
+            else
+                log_printf(LOG_SUCCESS, "Middleware output file \"%s\" create succeed.", buff);
+
+            free(output_file_name);
             free(buff);
         }
-        else if (reference_A2L_name_str != nullptr)
+        // 不存在时打开默认的中间件输出
+        else
         {
-            // 拼接默认的输出文件名
-            const char *prefix = OUTPUT_A2L_DEFAULT_PREFIX;
-            char *buffer = (char *)malloc(strlen(reference_A2L_name_str) + strlen(prefix) + strlen(OUTPUT_MIDDLEWARE_SUFFIX) + 1);
+            output_middleware_file = fopen(OUTPUT_DEFAULT_MIDDLEWARE_FILE_NAME, "wb");
 
-            // 获取路径部分长度和不带路径的文件名起始位置
-            int path_length = strlen(reference_A2L_name_str);
-            const char *file_name_no_dir = reference_A2L_name_str + path_length - 1;
-
-            // 遍历指针没有回到起始位置且没有遇到正反斜杠
-            while (file_name_no_dir + 1 != reference_A2L_name_str && *file_name_no_dir != '\\' && *file_name_no_dir != '/')
+            if (output_middleware_file == nullptr)
             {
-                path_length--;
-                file_name_no_dir--;
+                log_printf(LOG_FAILURE, "Middleware output file \"%s\" create failed.", OUTPUT_DEFAULT_MIDDLEWARE_FILE_NAME);
+                clean_and_exit(-1);
             }
-            file_name_no_dir++;
-
-            // 开始拼接
-            for (int count = 0; count < path_length; count++)
-                buffer[count] = reference_A2L_name_str[count];
-            sprintf(buffer + path_length, "%s%s", prefix, file_name_no_dir);
-
-            print_log(LOG_NORMAL, "%-31s %s\n", "Default output filename:", buffer);
-
-            // 打开输出文件
-            output_target_A2L_file = fopen(buffer, "wb+");
-
-            // 打开中间件文件
-            sprintf(buffer + path_length + strlen(prefix) + strlen(file_name_no_dir), OUTPUT_MIDDLEWARE_SUFFIX);
-            output_middleware_file = fopen(buffer, "wb+");
-
-            // 释放临时指针
-            free(buffer);
+            else
+                log_printf(LOG_SUCCESS, "Middleware output file \"%s\" create succeed.", OUTPUT_DEFAULT_MIDDLEWARE_FILE_NAME);
         }
-        // 检查map链接文件文件状态
-        if (input_map_file == nullptr)
-            print_log(LOG_WARN, "%-31s %s\n", "No link .map file input.", "Address will be set to 0x00000000");
     }
 }
 
 // 解析宏定义
 void solve_defines(void)
 {
-    file_node *target_node = source_file_list_head;
-
+    file_node *target_file_node = source_and_header_file_list_head;
+    define_node *define_show_begin_node = nullptr;
     // 循环处理文件链表
-    while (target_node != nullptr)
+
+    log_printf(LOG_INFO, "Solved definition details:");
+
+    while (target_file_node != nullptr)
     {
 
         FILE *target_file = nullptr;
-        target_file = fopen(target_node->file_name_str, "rb");
-        // 处理无效的文件输入
-        if (target_file == nullptr)
-        {
-            print_log(LOG_FAILURE, "Source file \"%s\" open failed.\n", target_node->file_name_str);
-            target_node = target_node->p_next;
-            continue;
-        }
-
-        // 成功打开文件
-        print_log(LOG_NORMAL, "%-31s %s\n\n", "Start define solving:", target_node->file_name_str);
+        target_file = fopen(target_file_node->file_name_str, "rb");
 
         char segment_buff[SEGMENT_BUFF_LENGTH] = {'\0'};
 
         // 循环按行解析
         while (true)
         {
-            error_type_enum err = f_getline(target_file, segment_buff, sizeof(segment_buff));
-            if (err != ERROR_NONE)
+            // 跳过空白读行
+            f_seek_skip_blanks(target_file);
+            if (f_getline(target_file, segment_buff, sizeof(segment_buff)) == 0)
                 break;
 
             // 查找到define
-            if (strstr(segment_buff, "#define"))
+            if (strstr(segment_buff, "#define") == segment_buff)
             {
-                printf("#define%s", segment_buff + strlen("#define"));
+                // 检查是否为数值类型的#define
+                {
+                    bool illegal_define = false;
+                    char *p_str = segment_buff + strlen("#define");
+                    // 跳过#define后的空格
+                    while (*p_str == ' ')
+                        p_str++;
+                    // 检查第一个非空格段是否为合法段(宏定义名)
+                    while (*p_str != ' ')
+                    {
+                        if (isalnum(*p_str) || *p_str == '_')
+                            p_str++;
+                        else
+                        {
+                            // 不是数字、字母、下划线，是换行符或者别的东西
+                            illegal_define = true;
+                            break;
+                        }
+                    }
+                    // 跳过第二个空格段
+                    while (*p_str == ' ')
+                        p_str++;
+
+                    // 检查后续的整段内容是否为正十进制数值
+                    if (!isdigit(*p_str) && !(*p_str == '+' && isdigit(*(p_str + 1))))
+                        illegal_define = true;
+
+                    // 验证合法性
+                    if (illegal_define)
+                        continue;
+                }
 
                 // 分配节点空间
-                static define_node *target_node;
+                static define_node *target_define_node;
                 if (define_list_head == nullptr)
                 {
                     define_list_head = (define_node *)malloc(sizeof(define_node));
-                    target_node = define_list_head;
-                    memset(target_node->define_str, '\0', sizeof(target_node->define_str));
-                    memset(target_node->context_str, '\0', sizeof(target_node->context_str));
-                    target_node->p_next = nullptr;
+                    target_define_node = define_list_head;
+                    define_show_begin_node = define_list_head;
                 }
                 else
                 {
-                    target_node->p_next = (define_node *)malloc(sizeof(define_node));
-                    target_node = target_node->p_next;
-                    memset(target_node->define_str, '\0', sizeof(target_node->define_str));
-                    memset(target_node->context_str, '\0', sizeof(target_node->context_str));
-                    target_node->p_next = nullptr;
+                    target_define_node->p_next = (define_node *)malloc(sizeof(define_node));
+                    target_define_node = target_define_node->p_next;
+                    if (define_show_begin_node == nullptr)
+                        define_show_begin_node = target_define_node;
                 }
 
+                memset(target_define_node->define_str, '\0', sizeof(target_define_node->define_str));
+                target_define_node->value = 0;
+                target_define_node->p_next = nullptr;
+
                 // 记录信息
-                sscanf(segment_buff, "%*s%s%s", target_node->define_str, target_node->context_str);
+                sscanf(segment_buff, "%*s%s%u", target_define_node->define_str, &target_define_node->value);
             }
         }
 
+        // 关闭文件
         fclose(target_file);
-        target_node = target_node->p_next;
+
+        // 日志输出
+        if (target_file_node->p_next == nullptr)
+        {
+            printf("                              └─%s\n", target_file_node->file_name_str);
+            while (true)
+            {
+                if (define_show_begin_node == nullptr)
+                {
+                    printf("                                    └─(NULL)\n");
+                    break;
+                }
+
+                if (define_show_begin_node->p_next == nullptr)
+                {
+                    printf("                                    └─%s -> %u\n", define_show_begin_node->define_str, define_show_begin_node->value);
+                    define_show_begin_node = nullptr;
+                    break;
+                }
+
+                printf("                                    ├─%s -> %u\n", define_show_begin_node->define_str, define_show_begin_node->value);
+                define_show_begin_node = define_show_begin_node->p_next;
+            }
+        }
+        else
+        {
+            printf("                              ├─%s\n", target_file_node->file_name_str);
+            while (true)
+            {
+                if (define_show_begin_node == nullptr)
+                {
+                    printf("                              │     └─(NULL)\n");
+                    break;
+                }
+
+                if (define_show_begin_node->p_next == nullptr)
+                {
+                    printf("                              │     └─%s -> %u\n", define_show_begin_node->define_str, define_show_begin_node->value);
+                    define_show_begin_node = nullptr;
+                    break;
+                }
+
+                printf("                              │     ├─%s -> %u\n", define_show_begin_node->define_str, define_show_begin_node->value);
+                define_show_begin_node = define_show_begin_node->p_next;
+            }
+        }
+
+        // 更新指针
+        target_file_node = target_file_node->p_next;
     }
 }
 
 // 类型解析
 void solve_types(void)
 {
-    file_node *target_node = source_file_list_head;
+    // 类型名称
+    const char *type_str[] = {
+        "TYPE_UNKNOWN",
+        "STRUCTURE",
+        "UBYTE",
+        "UWORD",
+        "ULONG",
+        "SBYTE",
+        "SWORD",
+        "SLONG",
+        "FLOAT32_IEEE",
+        "FLOAT64_IEEE",
+    };
 
+    file_node *target_file_node = source_and_header_file_list_head;
+    type_node *type_show_begin_node = nullptr;
+    log_printf(LOG_INFO, "Solved compound type details:");
     // 循环处理文件链表
-    while (target_node != nullptr)
+    while (target_file_node != nullptr)
     {
 
         FILE *target_file = nullptr;
-        target_file = fopen(target_node->file_name_str, "rb");
-        // 处理无效的文件输入
-        if (target_file == nullptr)
-        {
-            print_log(LOG_FAILURE, "Source file \"%s\" open failed.\n", target_node->file_name_str);
-            target_node = target_node->p_next;
-            continue;
-        }
-
-        // 成功打开文件
-        print_log(LOG_NORMAL, "%-31s %s\n\n", "Start type solving:", target_node->file_name_str);
+        target_file = fopen(target_file_node->file_name_str, "rb");
 
         char segment_buff[SEGMENT_BUFF_LENGTH] = {'\0'};
 
         // 循环按行解析
         while (true)
         {
-            error_type_enum err = f_getline(target_file, segment_buff, sizeof(segment_buff));
-            if (err != ERROR_NONE)
+            // 类型链表指针
+            static type_node *target_type_node = nullptr;
+
+            // 跳过注释和空白后
+            f_seek_skip_comments_and_blanks(target_file);
+            if (f_getline(target_file, segment_buff, sizeof(segment_buff)) == 0)
                 break;
 
             // 检测到类型定义起始
-            if (strstr(segment_buff, typedef_begin))
+            if (strstr(segment_buff, "typedef"))
             {
 
-                printf("\n%s\n\n", typedef_begin);
+                // 回退到typedef之后重新读取
+                fseek(target_file, -(strlen(segment_buff) - strlen("typedef") - (strstr(segment_buff, "typedef") - segment_buff)), SEEK_CUR);
+                f_seek_skip_comments_and_blanks(target_file);
+                if (f_getline(target_file, segment_buff, sizeof(segment_buff)) == 0)
+                    break;
 
-                // 循环处理
-                while (true)
+                // 检查是否是支持的类型
+                if (!strstr(segment_buff, "struct"))
                 {
-                    size_t seek_len = 0;
-                    error_type_enum err = f_getline(target_file, segment_buff, sizeof(segment_buff), &seek_len);
-                    if (err != ERROR_NONE)
-                        break;
+                    while (fgetc(target_file) != '}')
+                        ;
+                    continue;
+                }
 
-                    // 类型定义结束行
-                    if (strstr(segment_buff, typedef_end))
+                // 分配空间，类型链表头为空时初始化类型链表头
+                if (type_list_head == nullptr)
+                {
+                    type_list_head = (type_node *)malloc(sizeof(type_node));
+                    target_type_node = type_list_head;
+                    type_show_begin_node = type_list_head;
+                }
+                else
+                {
+                    // 扩展到下一张链表
+                    target_type_node->p_next = (type_node *)malloc(sizeof(type_node));
+                    target_type_node = target_type_node->p_next;
+                    if (type_show_begin_node == nullptr)
+                        type_show_begin_node = target_type_node;
+                }
+
+                // 节点初始化
+                target_type_node->p_next = nullptr;
+                target_type_node->type = TYPE_UNKNOWN;
+                target_type_node->element_list_head = nullptr;
+                memset(target_type_node->type_name_str, '\0', sizeof(target_type_node->type_name_str));
+
+                // 检测到结构体类型
+                if (strstr(segment_buff, "struct"))
+                {
+                    // 非法子成员记录
+                    bool illegal_sub_element = false;
+
+                    target_type_node->type = STRUCTURE;
+
+                    // 回退到struct后重新读取
+                    fseek(target_file, -(strlen(segment_buff) - strlen("struct")), SEEK_CUR);
+                    f_seek_skip_comments_and_blanks(target_file);
+
+                    // 获取直接类型名称
+                    f_getword(target_file, segment_buff, sizeof(segment_buff));
+                    if (segment_buff[0] != '\0')
+                        sprintf(target_type_node->type_name_str, segment_buff);
+
+                    // 跳转到类型定义内
+                    while (fgetc(target_file) != '{')
+                        ;
+
+                    // 新建第一个子元素节点
+                    sub_element_node *target_element_node = nullptr;
+
+                    // 循环读取类型定义
+                    while (true)
                     {
-                        printf("\n%s\n\n", typedef_end);
-                        break;
-                    }
-
-                    // 检测到typedef
-                    if (strstr(segment_buff, "typedef"))
-                    {
-                        static type_node *target_type_node;
-
-                        // 类型链表头为空时初始化类型链表头
-                        if (type_list_head == nullptr)
+                        if (f_get_codeline(target_file, segment_buff, sizeof(segment_buff)) == 0)
+                            break;
+                        if (segment_buff[0] == '}')
                         {
-                            type_list_head = (type_node *)malloc(sizeof(type_node));
-                            type_list_head->element_list_head = nullptr;
-                            type_list_head->p_next = nullptr;
-                            memset(type_list_head->type_name_str, '\0', sizeof(type_list_head->type_name_str));
-                            target_type_node = type_list_head;
+                            // 回退到结束末尾
+                            fseek(target_file, -(strlen(segment_buff) - 1), SEEK_CUR);
+                            break;
+                        }
+
+                        // 分配空间及初始化
+                        if (target_element_node == nullptr)
+                        {
+                            target_type_node->element_list_head = (sub_element_node *)malloc(sizeof(sub_element_node));
+                            target_element_node = target_type_node->element_list_head;
                         }
                         else
                         {
-                            // 扩展到下一张链表
-                            type_node *temp_node = (type_node *)malloc(sizeof(type_node));
-                            target_type_node->p_next = temp_node;
-                            target_type_node = temp_node;
+                            target_element_node->p_next = (sub_element_node *)malloc(sizeof(sub_element_node));
+                            target_element_node = target_element_node->p_next;
                         }
+                        target_element_node->p_next = nullptr;
+                        target_element_node->element_info = solve_variable_info(segment_buff);
 
-                        // 回退文件指针到typedef结尾
-                        fseek(target_file, -(seek_len - ((strstr(segment_buff, "typedef") - segment_buff) + strlen("typedef"))), SEEK_CUR);
-
-                        // 读取下一个有效词组
-                        f_getword(target_file, segment_buff, sizeof(segment_buff), &seek_len);
-                        // 表示struct起始
-                        if (!strcmp(segment_buff, "struct"))
+                        // 非法子成员检查
+                        if (target_element_node->element_info.element_count == 0)
                         {
-                            target_type_node->type = STRUCTURE;
-                            // 直接结构体类型名
-                            if (f_getword(target_file, segment_buff, sizeof(segment_buff), &seek_len) == ERROR_NONE)
-                                sprintf(target_type_node->type_name_str, segment_buff);
+                            illegal_sub_element = true;
+                            break;
                         }
-                        // 跳转到定义内
-                        while (fgetc(target_file) != '{')
+                        if (target_element_node->element_info.type == TYPE_UNKNOWN)
+                        {
+                            illegal_sub_element = true;
+                            break;
+                        }
+                        if (target_element_node->element_info.type == STRUCTURE)
+                        {
+                            illegal_sub_element = true;
+                            break;
+                        }
+                    }
+
+                    // 存在成员非法
+                    if (illegal_sub_element)
+                    {
+                        // 释放子元素列表
+                        while (target_type_node->element_list_head != nullptr)
+                        {
+                            sub_element_node *p_element = target_type_node->element_list_head;
+                            target_type_node->element_list_head = target_type_node->element_list_head->p_next;
+                            free(p_element);
+                        }
+
+                        // 释放当前的类型节点
+                        if (target_type_node == type_list_head)
+                        {
+                            free(type_list_head);
+                            type_list_head = nullptr;
+                            target_type_node = nullptr;
+                            type_show_begin_node = nullptr;
+                        }
+                        else
+                        {
+
+                            if (type_show_begin_node == target_type_node)
+                                type_show_begin_node = nullptr;
+
+                            type_node *p_prev_type_node = type_list_head;
+                            while (p_prev_type_node->p_next != target_type_node)
+                                p_prev_type_node = p_prev_type_node->p_next;
+                            free(target_type_node);
+                            target_type_node = p_prev_type_node;
+                            target_type_node->p_next = nullptr;
+                        }
+
+                        // 跳过剩余的声明部分
+                        while (fgetc(target_file) != '}')
                             ;
+                        continue;
+                    }
 
-                        // 新建第一个子元素节点
-                        sub_element_node *element_node = (sub_element_node *)malloc(sizeof(sub_element_node));
-                        element_node->p_next = nullptr;
-                        target_type_node->element_list_head = element_node;
-
-                        // 复合类型解析
-                        while (true)
+                    // 处理剩余部分的别名串
+                    while (true)
+                    {
+                        f_seek_skip_blanks(target_file);
+                        if (f_getword(target_file, segment_buff, sizeof(segment_buff)) == 0)
                         {
-                            f_seek_skip_blank(target_file);
-                            f_get_codeline(target_file, segment_buff, sizeof(segment_buff), &seek_len);
-
-                            // 解析成员类型
-                            element_node->element_info = solve_base_variable(segment_buff);
-
-                            /**
-                             * @todo
-                             * 去掉临时输出，改用制表符输出
-                             */
-                            if (element_node->element_info.element_count == 1)
-                                printf(".%s\n", element_node->element_info.name_str);
-                            else
-                                printf(".%s[%d]\n", element_node->element_info.name_str, element_node->element_info.element_count);
-
-                            f_seek_skip_blank(target_file);
-                            if (fgetc(target_file) == '}')
+                            if (fgetc(target_file) == ';')
                                 break;
-                            else
-                            {
-                                fseek(target_file, -1, SEEK_CUR);
-                                element_node->p_next = (sub_element_node *)malloc(sizeof(sub_element_node));
-                                element_node = element_node->p_next;
-                                element_node->p_next = nullptr;
-                            }
+                            continue;
                         }
 
-                        // 处理类型别名(一个或多个)
-                        while (true)
+                        // 已经有直接名串
+                        if (target_type_node->type_name_str[0] != '\0')
                         {
-                            if (f_getword(target_file, segment_buff, sizeof(segment_buff), &seek_len) == ERROR_NONE)
+                            // 扩展到下一张链表并记录信息
+                            target_type_node->p_next = (type_node *)malloc(sizeof(type_node));
+                            target_type_node->p_next->p_next = nullptr;
+                            target_type_node->p_next->type = target_type_node->type;
+                            target_type_node->p_next->element_list_head = target_type_node->element_list_head;
+                            target_type_node = target_type_node->p_next;
+                            memset(target_type_node->type_name_str, '\0', sizeof(target_type_node->type_name_str));
+                        }
+                        sprintf(target_type_node->type_name_str, segment_buff);
+                    }
+                }
+            }
+
+            memset(segment_buff, '\0', sizeof(segment_buff));
+        }
+
+        fclose(target_file);
+
+        /**
+         * @todo
+         * 日志输出逻辑需要大改，现在这个写法太傻逼了，层级越多越傻逼（但是写起来是真的快~
+         */
+
+        // 日志输出
+        {
+            if (target_file_node->p_next == nullptr)
+            {
+                printf("                              └─%s\n", target_file_node->file_name_str);
+
+                printf("                                    ├─Structure:\n");
+
+                while (true)
+                {
+                    if (type_show_begin_node == nullptr)
+                    {
+                        printf("                                    │     └─(NULL)\n");
+                        printf("                                    └─Other:\n");
+                        printf("                                          └─(NULL)\n");
+                        break;
+                    }
+
+                    if (type_show_begin_node->p_next == nullptr)
+                    {
+                        printf("                                    │     └─%s\n", type_show_begin_node->type_name_str);
+
+                        // 子成员打印
+                        {
+                            sub_element_node *p_element = type_show_begin_node->element_list_head;
+                            while (p_element != nullptr)
                             {
-                                // 当前还没有类型名
-                                if (target_type_node->type_name_str[0] == '\0')
+                                variable_info *info = &p_element->element_info;
+                                if (p_element->p_next != nullptr)
                                 {
-                                    sprintf(target_type_node->type_name_str, segment_buff);
+                                    if (info->element_count == 1)
+                                        printf("                                    │           ├─%-15s .%s\n", type_str[info->type], info->name_str);
+                                    else
+                                        printf("                                    │           ├─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
                                 }
                                 else
                                 {
-                                    target_type_node->p_next = (type_node *)malloc(sizeof(type_node));
-                                    memset(target_type_node->p_next->type_name_str, '\0', sizeof(target_type_node->type_name_str));
-                                    target_type_node->p_next->element_list_head = target_type_node->element_list_head;
-                                    target_type_node->p_next->type = target_type_node->type;
-                                    target_type_node->p_next->p_next = nullptr;
-                                    sprintf(target_type_node->p_next->type_name_str, segment_buff);
-                                    target_type_node = target_type_node->p_next;
+                                    if (info->element_count == 1)
+                                        printf("                                    │           └─%-15s .%s\n", type_str[info->type], info->name_str);
+                                    else
+                                        printf("                                    │           └─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
                                 }
+                                p_element = p_element->p_next;
                             }
-                            f_seek_skip_blank(target_file);
-                            if (fgetc(target_file) == ';')
-                                break;
+                        }
+
+                        printf("                                    └─Other:\n");
+                        printf("                                          └─(NULL)\n");
+                        type_show_begin_node = nullptr;
+                        break;
+                    }
+
+                    printf("                                    │     ├─%s\n", type_show_begin_node->type_name_str);
+
+                    // 子成员打印
+                    {
+                        sub_element_node *p_element = type_show_begin_node->element_list_head;
+                        while (p_element != nullptr)
+                        {
+                            variable_info *info = &p_element->element_info;
+                            if (p_element->p_next != nullptr)
+                            {
+                                if (info->element_count == 1)
+                                    printf("                                    │     │     ├─%-15s .%s\n", type_str[info->type], info->name_str);
+                                else
+                                    printf("                                    │     │     ├─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
+                            }
+                            else
+                            {
+                                if (info->element_count == 1)
+                                    printf("                                    │     │     └─%-15s .%s\n", type_str[info->type], info->name_str);
+                                else
+                                    printf("                                    │     │     └─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
+                            }
+                            p_element = p_element->p_next;
                         }
                     }
+
+                    type_show_begin_node = type_show_begin_node->p_next;
+                }
+            }
+            else
+            {
+                printf("                              ├─%s\n", target_file_node->file_name_str);
+
+                printf("                              │     ├─Structure:\n");
+
+                while (true)
+                {
+                    if (type_show_begin_node == nullptr)
+                    {
+                        printf("                              │     │     └─(NULL)\n");
+                        printf("                              │     └─Other:\n");
+                        printf("                              │           └─(NULL)\n");
+                        break;
+                    }
+
+                    if (type_show_begin_node->p_next == nullptr)
+                    {
+                        printf("                              │     │     └─%s\n", type_show_begin_node->type_name_str);
+
+                        // 子成员打印
+                        {
+                            sub_element_node *p_element = type_show_begin_node->element_list_head;
+                            while (p_element != nullptr)
+                            {
+                                variable_info *info = &p_element->element_info;
+                                if (p_element->p_next != nullptr)
+                                {
+                                    if (info->element_count == 1)
+                                        printf("                              │     │           ├─%-15s .%s\n", type_str[info->type], info->name_str);
+                                    else
+                                        printf("                              │     │           ├─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
+                                }
+                                else
+                                {
+                                    if (info->element_count == 1)
+                                        printf("                              │     │           └─%-15s .%s\n", type_str[info->type], info->name_str);
+                                    else
+                                        printf("                              │     │           └─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
+                                }
+                                p_element = p_element->p_next;
+                            }
+                        }
+
+                        printf("                              │     └─Other:\n");
+                        printf("                              │           └─(NULL)\n");
+                        type_show_begin_node = nullptr;
+                        break;
+                    }
+
+                    printf("                              │     │     ├─%s\n", type_show_begin_node->type_name_str);
+
+                    // 子成员打印
+                    {
+                        sub_element_node *p_element = type_show_begin_node->element_list_head;
+                        while (p_element != nullptr)
+                        {
+                            variable_info *info = &p_element->element_info;
+                            if (p_element->p_next != nullptr)
+                            {
+                                if (info->element_count == 1)
+                                    printf("                              │     │     │     ├─%-15s .%s\n", type_str[info->type], info->name_str);
+                                else
+                                    printf("                              │     │     │     ├─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
+                            }
+                            else
+                            {
+                                if (info->element_count == 1)
+                                    printf("                              │     │     │     └─%-15s .%s\n", type_str[info->type], info->name_str);
+                                else
+                                    printf("                              │     │     │     └─%-15s .%s[%d]\n", type_str[info->type], info->name_str, info->element_count);
+                            }
+                            p_element = p_element->p_next;
+                        }
+                    }
+
+                    type_show_begin_node = type_show_begin_node->p_next;
                 }
             }
         }
 
-        fclose(target_file);
-        target_node = target_node->p_next;
+        // 切换文件
+        target_file_node = target_file_node->p_next;
     }
 }
 
 // 处理中间件
 void solve_middleware(void)
 {
-    file_node *target_node = source_file_list_head;
+    fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n", START_OF_GENERATED_PATTERN_STR);
+    file_node *target_file_node = source_and_header_file_list_head;
 
-    // 循环处理输入文件链表
-    while (target_node != nullptr)
+    // 循环处理输入文件
+    while (target_file_node != nullptr)
     {
-        FILE *target_file = nullptr;
-        target_file = fopen(target_node->file_name_str, "rb");
-        if (target_file == nullptr)
-        {
-            print_log(LOG_FAILURE, "Source file \"%s\" load failed.\n", target_node->file_name_str);
-            target_node = target_node->p_next;
-            continue;
-        }
-
-        print_log(LOG_NORMAL, "%-31s %s\n\n", "Start variable solving:", target_node->file_name_str);
+        printf("\n\n");
+        log_printf(LOG_INFO, "Start solving file: \"%s\"\n", target_file_node->file_name_str);
+        FILE *target_file = fopen(target_file_node->file_name_str, "rb");
         char segment_buff[SEGMENT_BUFF_LENGTH] = {'\0'};
 
         // 循环获取输入文件行
-        while (f_getline(target_file, segment_buff, sizeof(segment_buff)) == ERROR_NONE)
+        while (f_getline(target_file, segment_buff, sizeof(segment_buff)) != 0)
         {
-            // 当前行为观测量起始位行
-            if (strstr(segment_buff, measurement_begin))
+            // 检测到标定量起始行
+            if (strstr(segment_buff, START_OF_CALIBRATION_PATTERN_STR))
             {
-                printf("\n%s\n\n", measurement_begin);
-                fprintf(output_middleware_file, auto_generated_measurement_start);
-
-                // 清空段缓冲区
-                memset(segment_buff, '\0', sizeof(segment_buff));
-
-                while (true)
+                do
                 {
-                    // 获取下一行
-                    size_t seek_len = 0;
-                    f_getline(target_file, segment_buff, sizeof(segment_buff), &seek_len);
-
-                    // 观测量结束行
-                    if (strstr(segment_buff, measurement_end))
-                    {
-                        printf("\n%s\n\n", measurement_end);
-                        fprintf(output_middleware_file, auto_generated_measurement_end);
+                    // 跳过空白部分
+                    f_seek_skip_comments_and_blanks(target_file);
+                    size_t read_count = f_getline(target_file, segment_buff, sizeof(segment_buff));
+                    if (strstr(segment_buff, END_OF_CALIBRATION_PATTERN_STR))
                         break;
-                    }
-                    // 非结束行，使用代码行进行处理，先回退，跳过空行后再重新读
-                    fseek(target_file, -seek_len, SEEK_CUR);
-                    f_seek_skip_blank(target_file);
-                    memset(segment_buff, '\0', sizeof(segment_buff));
-                    f_get_codeline(target_file, segment_buff, sizeof(segment_buff), &seek_len);
+                    // 回退行并读取代码行
+                    fseek(target_file, -read_count, SEEK_CUR);
+                    f_get_codeline(target_file, segment_buff, sizeof(segment_buff));
 
-                    // 解析元素变量信息
-                    {
-                        variable_info info = solve_variable(segment_buff);
+                    variable_info v_info = solve_variable_info(segment_buff);
 
-                        // 成功解析
-                        if (info.type != TYPE_NOT_SUPPORTED)
-                        {
-                            // 结构体解析
-                            if (info.type == STRUCTURE)
-                            {
-                                // 匹配类型描述链表位置
-                                type_node *target_type = type_list_head;
-                                while (target_type != nullptr)
-                                {
-                                    if (!strcmp(target_type->type_name_str, info.type_name_str))
-                                    {
-                                        info.type_name_str = target_type->type_name_str;
-                                        break;
-                                    }
-                                    target_type = target_type->p_next;
-                                }
-
-                                sub_element_node *sub_element_list = target_type->element_list_head;
-
-                                // 获取地址
-                                // info = get_element_addr(info, Input_Map);
-
-                                // 调试信息
-                                if (info.start_addr_32 != 0)
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-                                else
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_WARN, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_WARN, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-
-                                // 单变量
-                                if (info.element_count == 1)
-                                {
-                                    int addr_offset = 0;
-                                    while (sub_element_list != nullptr)
-                                    {
-                                        // 计算地址偏移
-                                        if (addr_offset % sub_element_list->element_info.single_element_size != 0)
-                                            addr_offset += sub_element_list->element_info.single_element_size - (addr_offset % sub_element_list->element_info.single_element_size);
-
-                                        // 子元素非数组
-                                        if (sub_element_list->element_info.element_count == 1)
-                                        {
-                                            fprintf(output_middleware_file, "%s\r\n\r\n", "/begin MEASUREMENT"); // 观测量头
-
-                                            fprintf(output_middleware_file, "    %s.%s\r\n", info.name_str, sub_element_list->element_info.name_str);  // 名称
-                                            fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                             // 描述
-                                            fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_type_str);                // 数据类型
-                                            fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                          // 转换式(保留原始值)
-                                            fprintf(output_middleware_file, "    %s\r\n", "0");                                                        // 分辨率
-                                            fprintf(output_middleware_file, "    %s\r\n", "0");                                                        // 精度误差
-                                            fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_min_limit_str);           // 下限
-                                            fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_max_limit_str);           // 上限
-                                            fprintf(output_middleware_file, "    %s 0x%08x\r\n\r\n", "ECU_ADDRESS", info.start_addr_32 + addr_offset); // ECU 地址
-
-                                            fprintf(output_middleware_file, "%s\r\n\r\n", "/end MEASUREMENT"); // 观测量尾
-
-                                            addr_offset += sub_element_list->element_info.single_element_size;
-                                        }
-                                        // 子元素是数组
-                                        else
-                                        {
-                                            // 计算地址偏移
-                                            if (addr_offset % sub_element_list->element_info.single_element_size != 0)
-                                                addr_offset += sub_element_list->element_info.single_element_size - (addr_offset % sub_element_list->element_info.single_element_size);
-
-                                            for (size_t count = 0; count < sub_element_list->element_info.element_count; count++)
-                                            {
-
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/begin MEASUREMENT"); // 观测量头
-
-                                                fprintf(output_middleware_file, "    %s.%s[%d]\r\n", info.name_str, sub_element_list->element_info.name_str, count);                                                    // 名称
-                                                fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                                                                                          // 描述
-                                                fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_type_str);                                                                             // 数据类型
-                                                fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                                                                                       // 转换式(保留原始值)
-                                                fprintf(output_middleware_file, "    %s\r\n", "0");                                                                                                                     // 分辨率
-                                                fprintf(output_middleware_file, "    %s\r\n", "0");                                                                                                                     // 精度误差
-                                                fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_min_limit_str);                                                                        // 下限
-                                                fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_max_limit_str);                                                                        // 上限
-                                                fprintf(output_middleware_file, "    %s 0x%08x\r\n\r\n", "ECU_ADDRESS", info.start_addr_32 + addr_offset + count * sub_element_list->element_info.single_element_size); // ECU 地址
-
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/end MEASUREMENT"); // 观测量尾
-                                            }
-                                            addr_offset += sub_element_list->element_info.element_count * sub_element_list->element_info.single_element_size;
-                                        }
-
-                                        sub_element_list = sub_element_list->p_next;
-                                    }
-                                }
-                                // 类型是数组
-                                else
-                                {
-                                    int addr_offset = 0;
-
-                                    for (size_t outter_count = 0; outter_count < info.element_count; outter_count++)
-                                    {
-                                        sub_element_node *list = sub_element_list;
-                                        while (list != nullptr)
-                                        {
-                                            // 计算地址偏移
-                                            if (addr_offset % list->element_info.single_element_size != 0)
-                                                addr_offset += list->element_info.single_element_size - (addr_offset % list->element_info.single_element_size);
-
-                                            // 子元素非数组
-                                            if (list->element_info.element_count == 1)
-                                            {
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/begin MEASUREMENT"); // 观测量头
-
-                                                fprintf(output_middleware_file, "    %s[%d].%s\r\n", info.name_str, outter_count, list->element_info.name_str); // 名称
-                                                fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                                  // 描述
-                                                fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_type_str);                                 // 数据类型
-                                                fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                               // 转换式(保留原始值)
-                                                fprintf(output_middleware_file, "    %s\r\n", "0");                                                             // 分辨率
-                                                fprintf(output_middleware_file, "    %s\r\n", "0");                                                             // 精度误差
-                                                fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_min_limit_str);                            // 下限
-                                                fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_max_limit_str);                            // 上限
-                                                fprintf(output_middleware_file, "    %s 0x%08x\r\n\r\n", "ECU_ADDRESS", info.start_addr_32 + addr_offset);      // ECU 地址
-
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/end MEASUREMENT"); // 观测量尾
-
-                                                addr_offset += list->element_info.single_element_size;
-                                            }
-                                            // 子元素是数组
-                                            else
-                                            {
-                                                // 计算地址偏移
-                                                if (addr_offset % list->element_info.single_element_size != 0)
-                                                    addr_offset += list->element_info.single_element_size - (addr_offset % list->element_info.single_element_size);
-
-                                                for (size_t count = 0; count < list->element_info.element_count; count++)
-                                                {
-
-                                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/begin MEASUREMENT"); // 观测量头
-
-                                                    fprintf(output_middleware_file, "    %s[%d].%s[%d]\r\n", info.name_str, outter_count, list->element_info.name_str, count);                                  // 名称
-                                                    fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                                                                              // 描述
-                                                    fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_type_str);                                                                             // 数据类型
-                                                    fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                                                                           // 转换式(保留原始值)
-                                                    fprintf(output_middleware_file, "    %s\r\n", "0");                                                                                                         // 分辨率
-                                                    fprintf(output_middleware_file, "    %s\r\n", "0");                                                                                                         // 精度误差
-                                                    fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_min_limit_str);                                                                        // 下限
-                                                    fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_max_limit_str);                                                                        // 上限
-                                                    fprintf(output_middleware_file, "    %s 0x%08x\r\n\r\n", "ECU_ADDRESS", info.start_addr_32 + addr_offset + count * list->element_info.single_element_size); // ECU 地址
-
-                                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/end MEASUREMENT"); // 观测量尾
-                                                }
-                                                addr_offset += list->element_info.element_count * list->element_info.single_element_size;
-                                            }
-
-                                            list = list->p_next;
-                                        }
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                // 获取地址
-                                // info = get_element_addr(info, Input_Map);
-
-                                // 调试信息
-                                if (info.start_addr_32 != 0)
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-                                else
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_WARN, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_WARN, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-
-                                // 单变量
-                                if (info.element_count == 1)
-                                {
-                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/begin MEASUREMENT"); // 观测量头
-
-                                    fprintf(output_middleware_file, "    %s\r\n", info.name_str);                                // 名称
-                                    fprintf(output_middleware_file, "    \"auto generated\"\r\n");                               // 描述
-                                    fprintf(output_middleware_file, "    %s\r\n", info.A2L_type_str);                            // 数据类型
-                                    fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                            // 转换式(保留原始值)
-                                    fprintf(output_middleware_file, "    %s\r\n", "0");                                          // 分辨率
-                                    fprintf(output_middleware_file, "    %s\r\n", "0");                                          // 精度误差
-                                    fprintf(output_middleware_file, "    %s\r\n", info.A2L_min_limit_str);                       // 下限
-                                    fprintf(output_middleware_file, "    %s\r\n", info.A2L_max_limit_str);                       // 上限
-                                    fprintf(output_middleware_file, "    %s 0x%08x\r\n\r\n", "ECU_ADDRESS", info.start_addr_32); // ECU 地址
-
-                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/end MEASUREMENT"); // 观测量尾
-                                }
-                                else
-                                {
-                                    for (size_t count = 0; count < info.element_count; count++)
-                                    {
-                                        fprintf(output_middleware_file, "%s\r\n\r\n", "/begin MEASUREMENT"); // 观测量头
-
-                                        fprintf(output_middleware_file, "    %s[%d]\r\n", info.name_str, count);                                                        // 名称
-                                        fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                                                  // 描述
-                                        fprintf(output_middleware_file, "    %s\r\n", info.A2L_type_str);                                                               // 数据类型
-                                        fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                                               // 转换式(保留原始值)
-                                        fprintf(output_middleware_file, "    %s\r\n", "0");                                                                             // 分辨率
-                                        fprintf(output_middleware_file, "    %s\r\n", "0");                                                                             // 精度误差
-                                        fprintf(output_middleware_file, "    %s\r\n", info.A2L_min_limit_str);                                                          // 下限
-                                        fprintf(output_middleware_file, "    %s\r\n", info.A2L_max_limit_str);                                                          // 上限
-                                        fprintf(output_middleware_file, "    %s 0x%08x\r\n\r\n", "ECU_ADDRESS", info.start_addr_32 + count * info.single_element_size); // ECU 地址
-
-                                        fprintf(output_middleware_file, "%s\r\n\r\n", "/end MEASUREMENT"); // 观测量尾
-                                    }
-                                }
-                            }
-                        }
-                        else if (info.name_str[0] != '\0') // 解析失败且变量名不为空
-                        {
-                            if (info.element_count == 1)
-                                print_log(LOG_FAILURE, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                            else
-                                print_log(LOG_FAILURE, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                        }
-                    }
-
-                    // 先跳行，防止段尾位注释引起异常
-                    f_seek_nextline(target_file);
-                    // 跳过空白段
-                    f_seek_skip_blank(target_file);
-                    // 清空段缓冲区
-                    memset(segment_buff, '\0', sizeof(segment_buff));
-                }
+                    f_print_calibration(output_middleware_file, v_info);
+                } while (true);
             }
 
-            // 当前行为标定量起始位行
-            if (strstr(segment_buff, calibration_begin))
+            // 观测量起始行
+            if (strstr(segment_buff, START_OF_MEASURMENT_PATTERN_STR))
             {
-                printf("\n%s\n\n", calibration_begin);
-                fprintf(output_middleware_file, auto_generated_calibration_start);
-
-                // 清空段缓冲区
-                memset(segment_buff, '\0', sizeof(segment_buff));
-
-                while (true)
+                do
                 {
-                    // 获取下一行
-                    size_t seek_len = 0;
-                    f_getline(target_file, segment_buff, sizeof(segment_buff), &seek_len);
-
-                    // 标定量结束行
-                    if (strstr(segment_buff, calibration_end))
-                    {
-                        printf("\n%s\n\n", calibration_end);
-                        fprintf(output_middleware_file, auto_generated_calibration_end);
+                    // 跳过空白部分
+                    f_seek_skip_comments_and_blanks(target_file);
+                    size_t read_count = f_getline(target_file, segment_buff, sizeof(segment_buff));
+                    if (strstr(segment_buff, END_OF_MEASURMENT_PATTERN_STR))
                         break;
-                    }
-
-                    // 非结束行，使用代码行进行处理，先回退，跳过空行后再重新读
-                    fseek(target_file, -seek_len, SEEK_CUR);
-                    f_seek_skip_blank(target_file);
-                    memset(segment_buff, '\0', sizeof(segment_buff));
-                    f_get_codeline(target_file, segment_buff, sizeof(segment_buff), &seek_len);
-
-                    // 解析元素变量信息
-                    {
-                        variable_info info = solve_variable(segment_buff);
-
-                        // 成功解析
-                        if (info.type != TYPE_NOT_SUPPORTED)
-                        {
-
-                            if (info.type == STRUCTURE)
-                            {
-                                // 匹配类型描述链表位置
-                                type_node *target_type = type_list_head;
-                                while (target_type != nullptr)
-                                {
-                                    if (!strcmp(target_type->type_name_str, info.type_name_str))
-                                    {
-                                        info.type_name_str = target_type->type_name_str;
-                                        break;
-                                    }
-                                    target_type = target_type->p_next;
-                                }
-
-                                sub_element_node *sub_element_list = target_type->element_list_head;
-
-                                // 获取地址
-                                // info = get_element_addr(info, Input_Map);
-
-                                // 调试信息
-                                if (info.start_addr_32 != 0)
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-                                else
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_WARN, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_WARN, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-
-                                // 单变量
-                                if (info.element_count == 1)
-                                {
-                                    int addr_offset = 0;
-                                    while (sub_element_list != nullptr)
-                                    {
-                                        // 计算地址偏移
-                                        if (addr_offset % sub_element_list->element_info.single_element_size != 0)
-                                            addr_offset += sub_element_list->element_info.single_element_size - (addr_offset % sub_element_list->element_info.single_element_size);
-
-                                        // 子元素非数组
-                                        if (sub_element_list->element_info.element_count == 1)
-                                        {
-                                            fprintf(output_middleware_file, "%s\r\n\r\n", "/begin CHARACTERISTIC"); // 标定量头
-
-                                            fprintf(output_middleware_file, "    %s.%s\r\n", info.name_str, sub_element_list->element_info.name_str); // 名称
-                                            fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                            // 描述
-                                            fprintf(output_middleware_file, "    %s\r\n", "VALUE");                                                   // 值类型(数值、数组、曲线)
-                                            fprintf(output_middleware_file, "    0x%08x\r\n", info.start_addr_32 + addr_offset);                      // ECU 地址
-                                            fprintf(output_middleware_file, "    Scalar_%s\r\n", sub_element_list->element_info.A2L_type_str);        // 数据类型
-                                            fprintf(output_middleware_file, "    %s\r\n", "0");                                                       // 允许最大差分
-                                            fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                         // 转换式(保留原始值)
-                                            fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_min_limit_str);          // 下限
-                                            fprintf(output_middleware_file, "    %s\r\n\r\n", sub_element_list->element_info.A2L_max_limit_str);      // 上限
-
-                                            fprintf(output_middleware_file, "%s\r\n\r\n", "/end CHARACTERISTIC"); // 标定量尾
-
-                                            addr_offset += sub_element_list->element_info.single_element_size;
-                                        }
-                                        // 子元素是数组
-                                        else
-                                        {
-                                            // 计算地址偏移
-                                            if (addr_offset % sub_element_list->element_info.single_element_size != 0)
-                                                addr_offset += sub_element_list->element_info.single_element_size - (addr_offset % sub_element_list->element_info.single_element_size);
-
-                                            for (size_t count = 0; count < sub_element_list->element_info.element_count; count++)
-                                            {
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/begin CHARACTERISTIC"); // 标定量头
-
-                                                fprintf(output_middleware_file, "    %s.%s[%d]\r\n", info.name_str, sub_element_list->element_info.name_str, count);                              // 名称
-                                                fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                                                                    // 描述
-                                                fprintf(output_middleware_file, "    %s\r\n", "VALUE");                                                                                           // 值类型(数值、数组、曲线)
-                                                fprintf(output_middleware_file, "    0x%08x\r\n", info.start_addr_32 + addr_offset + count * sub_element_list->element_info.single_element_size); // ECU 地址
-                                                fprintf(output_middleware_file, "    Scalar_%s\r\n", sub_element_list->element_info.A2L_type_str);                                                // 数据类型
-                                                fprintf(output_middleware_file, "    %s\r\n", "0");                                                                                               // 允许最大差分
-                                                fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                                                                 // 转换式(保留原始值)
-                                                fprintf(output_middleware_file, "    %s\r\n", sub_element_list->element_info.A2L_min_limit_str);                                                  // 下限
-                                                fprintf(output_middleware_file, "    %s\r\n\r\n", sub_element_list->element_info.A2L_max_limit_str);                                              // 上限
-
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/end CHARACTERISTIC"); // 标定量尾
-                                            }
-                                            addr_offset += sub_element_list->element_info.element_count * sub_element_list->element_info.single_element_size;
-                                        }
-
-                                        sub_element_list = sub_element_list->p_next;
-                                    }
-                                }
-                                // 类型是数组
-                                else
-                                {
-                                    int addr_offset = 0;
-
-                                    for (size_t outter_count = 0; outter_count < info.element_count; outter_count++)
-                                    {
-                                        sub_element_node *list = sub_element_list;
-                                        while (list != nullptr)
-                                        {
-                                            // 计算地址偏移
-                                            if (addr_offset % list->element_info.single_element_size != 0)
-                                                addr_offset += list->element_info.single_element_size - (addr_offset % list->element_info.single_element_size);
-
-                                            // 子元素非数组
-                                            if (list->element_info.element_count == 1)
-                                            {
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/begin CHARACTERISTIC"); // 标定量头
-
-                                                fprintf(output_middleware_file, "    %s[%d].%s\r\n", info.name_str, outter_count, list->element_info.name_str); // 名称
-                                                fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                                  // 描述
-                                                fprintf(output_middleware_file, "    %s\r\n", "VALUE");                                                         // 值类型(数值、数组、曲线)
-                                                fprintf(output_middleware_file, "    0x%08x\r\n", info.start_addr_32 + addr_offset);                            // ECU 地址
-                                                fprintf(output_middleware_file, "    Scalar_%s\r\n", list->element_info.A2L_type_str);                          // 数据类型
-                                                fprintf(output_middleware_file, "    %s\r\n", "0");                                                             // 允许最大差分
-                                                fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                               // 转换式(保留原始值)
-                                                fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_min_limit_str);                            // 下限
-                                                fprintf(output_middleware_file, "    %s\r\n\r\n", list->element_info.A2L_max_limit_str);                        // 上限
-
-                                                fprintf(output_middleware_file, "%s\r\n\r\n", "/end CHARACTERISTIC"); // 标定量尾
-
-                                                addr_offset += list->element_info.single_element_size;
-                                            }
-                                            // 子元素是数组
-                                            else
-                                            {
-                                                // 计算地址偏移
-                                                if (addr_offset % list->element_info.single_element_size != 0)
-                                                    addr_offset += list->element_info.single_element_size - (addr_offset % list->element_info.single_element_size);
-
-                                                for (size_t count = 0; count < list->element_info.element_count; count++)
-                                                {
-
-                                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/begin CHARACTERISTIC"); // 标定量头
-
-                                                    fprintf(output_middleware_file, "    %s[%d].%s[%d]\r\n", info.name_str, outter_count, list->element_info.name_str, count);            // 名称
-                                                    fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                                                        // 描述
-                                                    fprintf(output_middleware_file, "    %s\r\n", "VALUE");                                                                               // 值类型(数值、数组、曲线)
-                                                    fprintf(output_middleware_file, "    0x%08x\r\n", info.start_addr_32 + addr_offset + count * list->element_info.single_element_size); // ECU 地址
-                                                    fprintf(output_middleware_file, "    Scalar_%s\r\n", list->element_info.A2L_type_str);                                                // 数据类型
-                                                    fprintf(output_middleware_file, "    %s\r\n", "0");                                                                                   // 允许最大差分
-                                                    fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                                                     // 转换式(保留原始值)
-                                                    fprintf(output_middleware_file, "    %s\r\n", list->element_info.A2L_min_limit_str);                                                  // 下限
-                                                    fprintf(output_middleware_file, "    %s\r\n\r\n", list->element_info.A2L_max_limit_str);                                              // 上限
-
-                                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/end CHARACTERISTIC"); // 标定量尾
-                                                }
-                                                addr_offset += list->element_info.element_count * list->element_info.single_element_size;
-                                            }
-
-                                            list = list->p_next;
-                                        }
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                // 获取地址
-                                // info = get_element_addr(info, Input_Map);
-
-                                // 调试信息
-                                if (info.start_addr_32 != 0)
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_SUCCESS, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-                                else
-                                {
-                                    if (info.element_count == 1)
-                                        print_log(LOG_WARN, "0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                                    else
-                                        print_log(LOG_WARN, "0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                                }
-
-                                // 单变量
-                                if (info.element_count == 1)
-                                {
-                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/begin CHARACTERISTIC"); // 标定量头
-
-                                    fprintf(output_middleware_file, "    %s\r\n", info.name_str);              // 名称
-                                    fprintf(output_middleware_file, "    \"auto generated\"\r\n");             // 描述
-                                    fprintf(output_middleware_file, "    %s\r\n", "VALUE");                    // 值类型(数值、数组、曲线)
-                                    fprintf(output_middleware_file, "    0x%08x\r\n", info.start_addr_32);     // ECU 地址
-                                    fprintf(output_middleware_file, "    Scalar_%s\r\n", info.A2L_type_str);   // 数据类型
-                                    fprintf(output_middleware_file, "    %s\r\n", "0");                        // 允许最大差分
-                                    fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");          // 转换式(保留原始值)
-                                    fprintf(output_middleware_file, "    %s\r\n", info.A2L_min_limit_str);     // 下限
-                                    fprintf(output_middleware_file, "    %s\r\n\r\n", info.A2L_max_limit_str); // 上限
-
-                                    fprintf(output_middleware_file, "%s\r\n\r\n", "/end CHARACTERISTIC"); // 标定量尾
-                                }
-                                else
-                                {
-                                    for (size_t count = 0; count < info.element_count; count++)
-                                    {
-                                        fprintf(output_middleware_file, "%s\r\n\r\n", "/begin CHARACTERISTIC"); // 标定量头
-
-                                        fprintf(output_middleware_file, "    %s[%d]\r\n", info.name_str, count);                                  // 名称
-                                        fprintf(output_middleware_file, "    \"auto generated\"\r\n");                                            // 描述
-                                        fprintf(output_middleware_file, "    %s\r\n", "VALUE");                                                   // 值类型(数值、数组、曲线)
-                                        fprintf(output_middleware_file, "    0x%08x\r\n", info.start_addr_32 + count * info.single_element_size); // ECU 地址
-                                        fprintf(output_middleware_file, "    Scalar_%s\r\n", info.A2L_type_str);                                  // 数据类型
-                                        fprintf(output_middleware_file, "    %s\r\n", "0");                                                       // 允许最大差分
-                                        fprintf(output_middleware_file, "    %s\r\n", "NO_COMPU_METHOD");                                         // 转换式(保留原始值)
-                                        fprintf(output_middleware_file, "    %s\r\n", info.A2L_min_limit_str);                                    // 下限
-                                        fprintf(output_middleware_file, "    %s\r\n\r\n", info.A2L_max_limit_str);                                // 上限
-
-                                        fprintf(output_middleware_file, "%s\r\n\r\n", "/end CHARACTERISTIC"); // 标定量尾
-                                    }
-                                }
-                            }
-                        }
-                        else if (info.name_str[0] != '\0') // 解析失败且变量名不为空
-                        {
-                            if (info.element_count == 1)
-                                printf("[< FAIL >] 0x%08x %-20s %s;\n", info.start_addr_32, info.A2L_type_str, info.name_str);
-                            else
-                                printf("[< FAIL >] 0x%08x %-20s %s[%d];\n", info.start_addr_32, info.A2L_type_str, info.name_str, info.element_count);
-                        }
-                    }
-
-                    // 先跳行，防止段尾位注释引起异常
-                    f_seek_nextline(target_file);
-                    // 跳过空白段
-                    f_seek_skip_blank(target_file);
-                    // 清空段缓冲区
-                    memset(segment_buff, '\0', sizeof(segment_buff));
-                }
+                    // 回退行并读取代码行
+                    fseek(target_file, -read_count, SEEK_CUR);
+                    f_get_codeline(target_file, segment_buff, sizeof(segment_buff));
+                    // log_printf(LOG_INFO, segment_buff);
+                    f_print_measurement(output_middleware_file, solve_variable_info(segment_buff));
+                } while (true);
             }
         }
 
+        printf("\n");
+        log_printf(LOG_INFO, "File: \"%s\" solve finished.", target_file_node->file_name_str);
         fclose(target_file);
-        target_node = target_node->p_next;
+        target_file_node = target_file_node->p_next;
     }
+
+    fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n", END_OF_GENERATED_PATTERN_STR);
 }
 
 // 处理最终A2L输出
@@ -969,10 +866,10 @@ void solve_A2L_output(void)
     char segment_buff[SEGMENT_BUFF_LENGTH] = {'\0'};
 
     // 读取并复制参考文件直到 a2l MODULE 结尾
-    while (f_getline(input_reference_A2L_file, segment_buff, sizeof(segment_buff)) == ERROR_NONE)
+    while (f_getline(input_reference_A2L_file, segment_buff, sizeof(segment_buff)) != 0)
     {
         // 当前行为 a2l MODULE 结尾
-        if (strstr(segment_buff, a2l_module_end))
+        if (strstr(segment_buff, A2L_INSERT_PATTERN_STR))
         {
             // 回退文件指针到上一行结尾
             fseek(input_reference_A2L_file, -2, SEEK_CUR);
@@ -982,7 +879,7 @@ void solve_A2L_output(void)
         }
 
         // 输出行到文件
-        // fprintf(Output_Target, segment_buff);    // 太大300会段溢出
+        // fprintf(Output_Target, segment_buff);    // 太大会段溢出,标准输入输出库存在的问题
         for (int count = 0; count < SEGMENT_BUFF_LENGTH; count++) // 逐个输出
         {
             fputc(segment_buff[count], output_target_A2L_file);
@@ -993,6 +890,8 @@ void solve_A2L_output(void)
         // 清空段缓冲区
         memset(segment_buff, '\0', sizeof(segment_buff));
     }
+
+    // 清空缓冲区并回退到文件起始位置
     fseek(output_middleware_file, 0, SEEK_SET);
 
     char ch = fgetc(output_middleware_file);
@@ -1003,7 +902,7 @@ void solve_A2L_output(void)
     }
 
     // 输出参考文件的剩余部分
-    while (f_getline(input_reference_A2L_file, segment_buff, sizeof(segment_buff)) == ERROR_NONE)
+    while (f_getline(input_reference_A2L_file, segment_buff, sizeof(segment_buff)) != 0)
     {
         // 输出行到文件
         fprintf(output_target_A2L_file, segment_buff);
@@ -1011,4 +910,5 @@ void solve_A2L_output(void)
         memset(segment_buff, '\0', sizeof(segment_buff));
     }
 }
+
 // end

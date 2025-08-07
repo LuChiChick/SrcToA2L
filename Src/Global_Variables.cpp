@@ -11,8 +11,8 @@ type_node *type_list_head = nullptr;
 // 宏定义列表
 define_node *define_list_head = nullptr;
 
-// 源文件列表
-file_node *source_file_list_head = nullptr;
+// 源文件及头文件列表
+file_node *source_and_header_file_list_head = nullptr;
 
 // 文件列表
 FILE *input_reference_A2L_file = nullptr;

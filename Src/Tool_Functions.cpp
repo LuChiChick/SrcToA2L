@@ -6,219 +6,138 @@ extern "C"
 #include "string.h"
 #include "ctype.h"
 #include "stdarg.h"
+#include "time.h"
+#include "stdlib.h"
 }
 
-// 读取文件下一行
-error_type_enum f_getline(FILE *file, char *buffer, const size_t buffer_len, size_t *seek_len)
+// 读取文件一行
+size_t f_getline(FILE *file, char *buffer, const size_t buffer_len)
 {
     if (buffer == nullptr || file == nullptr)
-    {
-        *seek_len = 0;
-        return ERROR_ILLEGAL_POINTER;
-    }
+        return 0;
 
     memset(buffer, '\0', buffer_len);
 
     size_t count = 0;
 
+    // 循环读取
     while (true)
     {
+        // 超长判定
+        if (count + 1 == buffer_len)
+            return buffer_len;
+
+        // 正常读取
         char ch = fgetc(file);
 
-        if (count >= buffer_len) // 超长
-        {
-            fseek(file, -count, SEEK_CUR);
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_OUT_OF_LENGTH;
-        }
+        // 仅文件结尾时
+        if (ch == EOF && count == 0)
+            return 0;
 
-        if (ch == EOF && count == 0) // 仅文件结尾时
-        {
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_END_OF_FILE;
-        }
-
-        if (ch == '\n' || ch == EOF) // 成功换行or文件结尾
+        // 成功换行
+        if (ch == '\n')
         {
             buffer[count] = '\n';
-            if (seek_len != nullptr)
-                *seek_len = count + 1;
-            return ERROR_NONE;
+            return count + 1;
         }
 
+        // 没有换行但是遇到了文件结尾
+        if (ch == EOF)
+        {
+            buffer[count] = '\n';
+            return count;
+        }
+
+        // 其它情况下正常复制
         buffer[count] = ch;
         count++;
     }
 }
 
-// 获取文件代码行(以;为分界的代码逻辑行，忽略中途的注释)
-error_type_enum f_get_codeline(FILE *file, char *buffer, const size_t buffer_len, size_t *seek_len)
+// 读取下一个有效词组
+size_t f_getword(FILE *file, char *buffer, const size_t buffer_len)
 {
     if (buffer == nullptr || file == nullptr)
-    {
-        *seek_len = 0;
-        return ERROR_ILLEGAL_POINTER;
-    }
+        return 0;
+    size_t read_count = 0;
 
+    // 过滤空白部分
+    read_count = f_seek_skip_comments_and_blanks(file);
     memset(buffer, '\0', buffer_len);
 
-    size_t skip_count = 0;
-
-    // 跳过空白内容和注释
-    while (true)
-    {
-        skip_count += f_seek_skip_blank(file);
-
-        // 忽略注释内容
-        if (fgetc(file) == '/')
-        {
-            skip_count++;
-            // 是单行注释，连续遇到两个'/'
-            if (fgetc(file) == '/')
-            {
-                skip_count++;
-                skip_count += f_seek_nextline(file);
-            }
-            // 是多行注释，直接跳过中间内容直到遇到下一个'/'
-            else
-            {
-                while (fgetc(file) != '/')
-                    skip_count++;
-                skip_count++;
-            }
-        }
-        else
-        {
-            fseek(file, -1, SEEK_CUR);
-            break;
-        }
-    }
-
-    size_t code_line_count = 0;
+    size_t write_count = 0;
     while (true)
     {
         char ch = fgetc(file);
 
-        if (code_line_count >= buffer_len) // 超长
-        {
-            fseek(file, -(skip_count + code_line_count), SEEK_CUR);
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_OUT_OF_LENGTH;
-        }
-
-        if (ch == EOF && code_line_count == 0) // 仅文件结尾时
-        {
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_END_OF_FILE;
-        }
-
-        if (ch == ';') // 代码结尾
-        {
-            buffer[code_line_count] = ';';
-            if (seek_len != nullptr)
-                *seek_len = code_line_count + skip_count + 1;
-            return ERROR_NONE;
-        }
-
-        if (ch == EOF) // 文件结尾
-        {
-            buffer[code_line_count] = '\0';
-            if (seek_len != nullptr)
-                *seek_len = code_line_count + skip_count;
-            return ERROR_NONE;
-        }
-
-        buffer[code_line_count] = ch;
-        code_line_count++;
-    }
-}
-
-// 读取下一个有效词组
-error_type_enum f_getword(FILE *file, char *buffer, const size_t buffer_len, size_t *seek_len)
-{
-    if (buffer == nullptr || file == nullptr)
-    {
-        *seek_len = 0;
-        return ERROR_ILLEGAL_POINTER;
-    }
-
-    size_t read_count = 0;
-    // 过滤空白
-    while (true)
-    {
-        char ch = fgetc(file);
-        if (read_count >= buffer_len) // 超长
+        if (write_count >= buffer_len) // 超长
         {
             fseek(file, -read_count, SEEK_CUR);
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_OUT_OF_LENGTH;
+            return 0;
         }
 
         if (ch == EOF && read_count == 0) // 仅文件结尾时
-        {
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_END_OF_FILE;
-        }
+            return 0;
 
-        // 过滤空白
-        if (ch == ' ' || ch == '\r' || ch == '\n')
-        {
-            read_count++;
-            continue;
-        }
-
-        // 遇到非空格非换行的有效字符
-        fseek(file, -1, SEEK_CUR);
-        break;
-    }
-
-    size_t count = 0;
-    memset(buffer, '\0', buffer_len);
-
-    while (true)
-    {
-        char ch = fgetc(file);
-
-        if (read_count >= buffer_len) // 超长
-        {
-            fseek(file, -read_count, SEEK_CUR);
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_OUT_OF_LENGTH;
-        }
-
-        if (ch == EOF && count == 0) // 仅文件结尾时
-        {
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_END_OF_FILE;
-        }
-
-        if (!isalnum(ch) && ch != '_' && count == 0) // 遇到的第一个就是非有效字符
+        if (!isalnum(ch) && ch != '_' && read_count == 0) // 遇到的第一个就是非有效字符
         {
             fseek(file, -(read_count + 1), SEEK_CUR);
-            if (seek_len != nullptr)
-                *seek_len = 0;
-            return ERROR_ILLEGAL_WORD_SECTION;
+            return 0;
         }
 
         if (!isalnum(ch) && ch != '_') // 非字符类
         {
             // 回退指针后正常返回
             fseek(file, -1, SEEK_CUR);
-            if (seek_len != nullptr)
-                *seek_len = read_count;
-            return ERROR_NONE;
+            return read_count;
         }
 
-        buffer[count] = ch;
-        count++;
+        buffer[write_count] = ch;
+        write_count++;
+        read_count++;
+    }
+}
+
+// 获取文件代码行(以;为分界的代码逻辑行，忽略中途的注释)
+size_t f_get_codeline(FILE *file, char *buffer, const size_t buffer_len)
+{
+    if (buffer == nullptr || file == nullptr)
+        return 0;
+    size_t read_count = 0;
+
+    // 过滤空白和注释部分
+    read_count = f_seek_skip_comments_and_blanks(file);
+    memset(buffer, '\0', buffer_len);
+
+    size_t write_count = 0;
+
+    while (true)
+    {
+        char ch = fgetc(file);
+
+        if (write_count >= buffer_len) // 超长
+        {
+            fseek(file, -(read_count), SEEK_CUR);
+            return 0;
+        }
+
+        if (ch == EOF && read_count == 0) // 仅文件结尾时
+            return 0;
+
+        if (ch == ';') // 代码结尾
+        {
+            buffer[write_count] = ';';
+            return read_count + 1;
+        }
+
+        if (ch == EOF) // 文件结尾
+        {
+            buffer[write_count] = '\0';
+            return read_count;
+        }
+
+        buffer[write_count] = ch;
+        write_count++;
         read_count++;
     }
 }
@@ -226,11 +145,20 @@ error_type_enum f_getword(FILE *file, char *buffer, const size_t buffer_len, siz
 // 前进到下一行
 size_t f_seek_nextline(FILE *file)
 {
+    if (file == nullptr)
+        return 0;
+
     size_t count = 0;
     while (true)
     {
         char ch = fgetc(file);
-        if (ch == '\n' || ch == EOF)
+
+        if (ch == '\n')
+        {
+            count++;
+            break;
+        }
+        if (ch == EOF)
             break;
 
         count++;
@@ -240,8 +168,11 @@ size_t f_seek_nextline(FILE *file)
 }
 
 // 跳转到下一个非空字符
-size_t f_seek_skip_blank(FILE *file)
+size_t f_seek_skip_blanks(FILE *file)
 {
+    if (file == nullptr)
+        return 0;
+
     size_t count = 0;
     while (true)
     {
@@ -263,145 +194,184 @@ size_t f_seek_skip_blank(FILE *file)
     return count;
 }
 
-// 基础变量类型解析
-variable_type_enum get_variable_base_type(const char *str)
+// 跳过注释和空白内容(不跳过识别段)
+size_t f_seek_skip_comments_and_blanks(FILE *file)
 {
-    if (!strcmp(str, "bool"))
-        return UBYTE;
-    if (!strcmp(str, "boolean_t"))
-        return UBYTE;
+    if (file == nullptr)
+        return 0;
 
-    if (!strcmp(str, "uint8_t"))
-        return UBYTE;
-    if (!strcmp(str, "uint16_t"))
-        return UWORD;
-    if (!strcmp(str, "uint32_t"))
-        return ULONG;
+    size_t count = 0;
 
-    if (!strcmp(str, "int8_t"))
-        return SBYTE;
-    if (!strcmp(str, "int16_t"))
-        return SWORD;
-    if (!strcmp(str, "int32_t"))
-        return SLONG;
+    bool find_pattern_section = false;
 
-    if (!strcmp(str, "float"))
-        return FLOAT32;
-    if (!strcmp(str, "double"))
-        return FLOAT64;
+    while (true)
+    {
+        // 跳转到下一个有效字符
+        count += f_seek_skip_blanks(file);
+        char ch = fgetc(file);
 
-    return TYPE_NOT_SUPPORTED;
+        // 检测到注释内容
+        if (ch == '/')
+        {
+            ch = fgetc(file);
+
+            // 是单行注释,直接跳转行
+            if (ch == '/')
+            {
+                fseek(file, -2, SEEK_CUR);
+                count += f_seek_nextline(file);
+            }
+            // 是多行注释，判断是不是识别段（识别段在一行内结束）
+            else
+            {
+                // 回退读行
+                fseek(file, -2, SEEK_CUR);
+                char segment_buff[SEGMENT_BUFF_LENGTH] = "\0";
+                size_t read_length = f_getline(file, segment_buff, sizeof(segment_buff));
+
+                // 目标段正匹配且在起始位置
+                if (strstr(segment_buff, START_OF_MEASURMENT_PATTERN_STR) == segment_buff)
+                    find_pattern_section = true;
+                if (strstr(segment_buff, END_OF_MEASURMENT_PATTERN_STR) == segment_buff)
+                    find_pattern_section = true;
+                if (strstr(segment_buff, START_OF_CALIBRATION_PATTERN_STR) == segment_buff)
+                    find_pattern_section = true;
+                if (strstr(segment_buff, END_OF_CALIBRATION_PATTERN_STR) == segment_buff)
+                    find_pattern_section = true;
+
+                // 发现匹配段
+                if (find_pattern_section)
+                {
+                    fseek(file, -read_length, SEEK_CUR);
+                    break;
+                }
+                else
+                    fseek(file, -(read_length - 2), SEEK_CUR); // 回退到第第二位，避免单行的多行注释引发的问题
+
+                // 读取到多行注释结束位置
+                while (fgetc(file) != '/')
+                    count++;
+                count++;
+
+                // 继续下个处理循环
+                continue;
+            }
+        }
+        // 文件结尾
+        else if (ch == EOF)
+            break;
+        // 非注释内容
+        else
+        {
+            // 回退指针并退出
+            fseek(file, -1, SEEK_CUR);
+            break;
+        }
+    }
+
+    return count;
 }
 
-// 基础变量解析
-variable_info solve_base_variable(const char *str)
+// 解析变量类型
+variable_type_enum solve_variable_type(const char *type_str)
+{
+    // 基础类型解析
+    {
+        if (!strcmp(type_str, "bool"))
+            return UBYTE;
+        if (!strcmp(type_str, "boolean_t"))
+            return UBYTE;
+
+        if (!strcmp(type_str, "uint8_t"))
+            return UBYTE;
+
+        if (!strcmp(type_str, "uint16_t"))
+            return UWORD;
+
+        if (!strcmp(type_str, "uint32_t"))
+            return ULONG;
+
+        if (!strcmp(type_str, "int8_t"))
+            return SBYTE;
+
+        if (!strcmp(type_str, "int16_t"))
+            return SWORD;
+
+        if (!strcmp(type_str, "int"))
+            return SLONG;
+        if (!strcmp(type_str, "int32_t"))
+            return SLONG;
+
+        if (!strcmp(type_str, "float"))
+            return FLOAT32;
+        if (!strcmp(type_str, "double"))
+            return FLOAT64;
+    }
+
+    // 遍历复合类型
+    type_node *target_node = type_list_head;
+    while (target_node != nullptr)
+    {
+        if (!strcmp(type_str, target_node->type_name_str))
+            return target_node->type;
+        target_node = target_node->p_next;
+    }
+
+    return TYPE_UNKNOWN;
+}
+
+// 变量解析
+variable_info solve_variable_info(const char *code_line_str)
 {
     variable_info info;
 
-    // 读取前段内容并获取元素类型
-    char buff[VARIABLE_NAME_LENGTH_MAX] = {'\0'};
+    char buff[VARIABLE_NAME_STR_LENGTH_MAX] = {'\0'};
     size_t offset = 0;
-
     // 跳过前方的修饰段
     while (true)
     {
-        sscanf(str + offset, "%s", buff);
+        sscanf(code_line_str + offset, "%s", buff);
 
         // 不是下列任何的前置修饰符号时跳出
         if (!(!strcmp("const", buff) || !strcmp("static", buff) || !strcmp("volatile", buff)))
             break;
 
-        // 是修饰段
-        while (str[offset] != ' ' && str[offset] != '\0') // 跳过当前词组段
+        // 跳过当前修饰词
+        while (code_line_str[offset] != ' ' && code_line_str[offset] != '\0')
             offset++;
-        while (!isalnum(str[offset]) && str[offset] != '\0') // 前进到有效字符
+        // 跳过修饰词后的空白字符,前进到有效字符(字母或下划线开头的变量名)
+        while (!(isalpha(code_line_str[offset]) || code_line_str[offset] == '_') && code_line_str[offset] != '\0')
             offset++;
 
         memset(buff, '\0', sizeof(buff));
     }
 
-    info.type = get_variable_base_type(buff);
-
-    // 更新字符串信息
-    switch (info.type)
-    {
-    case UBYTE:
-        sprintf(info.A2L_type_str, "UBYTE");
-        sprintf(info.A2L_min_limit_str, "0");
-        sprintf(info.A2L_max_limit_str, "255");
-        info.single_element_size = 1;
-        break;
-    case UWORD:
-        sprintf(info.A2L_type_str, "UWORD");
-        sprintf(info.A2L_min_limit_str, "0");
-        sprintf(info.A2L_max_limit_str, "65535");
-        info.single_element_size = 2;
-        break;
-    case ULONG:
-        sprintf(info.A2L_type_str, "ULONG");
-        sprintf(info.A2L_min_limit_str, "0");
-        sprintf(info.A2L_max_limit_str, "4294967295");
-        info.single_element_size = 4;
-        break;
-    case SBYTE:
-        sprintf(info.A2L_type_str, "SBYTE");
-        sprintf(info.A2L_min_limit_str, "-128");
-        sprintf(info.A2L_max_limit_str, "127");
-        info.single_element_size = 1;
-    case SWORD:
-        sprintf(info.A2L_type_str, "SWORD");
-        sprintf(info.A2L_min_limit_str, "-32768");
-        sprintf(info.A2L_max_limit_str, "32767");
-        info.single_element_size = 2;
-        break;
-    case SLONG:
-        sprintf(info.A2L_type_str, "SLONG");
-        sprintf(info.A2L_min_limit_str, "-2147483648");
-        sprintf(info.A2L_max_limit_str, "2147483647");
-        info.single_element_size = 4;
-        break;
-    case FLOAT32:
-        sprintf(info.A2L_type_str, "FLOAT32_IEEE");
-        sprintf(info.A2L_min_limit_str, "-3.4E+38");
-        sprintf(info.A2L_max_limit_str, "3.4E+38");
-        info.single_element_size = 4;
-        break;
-    case FLOAT64:
-        sprintf(info.A2L_type_str, "FLOAT64_IEEE");
-        sprintf(info.A2L_min_limit_str, "-1.7E+308");
-        sprintf(info.A2L_max_limit_str, "1.7E+308");
-        info.single_element_size = 8;
-        break;
-    default:
-        sprintf(info.A2L_type_str, "UNSUPPORTED");
-        sprintf(info.A2L_min_limit_str, "0");
-        sprintf(info.A2L_max_limit_str, "0");
-        info.single_element_size = 0;
-    }
+    // 读取前段内容并获取元素类型
+    info.type = solve_variable_type(buff);
+    sprintf(info.type_name_str, buff);
 
     // 读取后段内容
-    sscanf(str + offset + strlen(buff), "%s", buff);
+    sscanf(code_line_str + offset + strlen(buff), "%s", buff);
 
     // 获取名字和长度
-    for (int count = 0; count < VARIABLE_NAME_LENGTH_MAX; count++)
+    for (int count = 0; count < VARIABLE_NAME_STR_LENGTH_MAX; count++)
     {
         if (buff[count] == '[') // 识别到数组
         {
-            for (int n = count + 1; n < VARIABLE_NAME_LENGTH_MAX; n++)
+            for (int n = count + 1; n < VARIABLE_NAME_STR_LENGTH_MAX; n++)
             {
+                // 到达数组定义结尾
                 if (buff[n] == ']')
                     break;
                 if (isdigit(buff[n]))
                     info.element_count = info.element_count * 10 + buff[n] - '0';
                 else
                 {
-                    /**
-                     * @todo
-                     * 添加宏定义识别，先暂时将不支持的量定义为1
-                     */
-                    // 处理宏定义常量
-                    char define_str[VARIABLE_NAME_LENGTH_MAX] = {'\0'};
-                    for (int count = 0; count < VARIABLE_NAME_LENGTH_MAX; count++)
+                    // 处理宏定义常量,暂时将不支持的量定义为1
+
+                    // 提取宏字符串
+                    char define_str[VARIABLE_NAME_STR_LENGTH_MAX] = {'\0'};
+                    for (int count = 0; count < VARIABLE_NAME_STR_LENGTH_MAX; count++)
                         if (buff[n + count] == ']')
                             break;
                         else
@@ -414,20 +384,18 @@ variable_info solve_base_variable(const char *str)
                         // 找到宏定义了
                         if (!strcmp(target_define_node->define_str, define_str))
                         {
-                            int value = 1;
-                            sscanf(target_define_node->context_str, "%d", &value);
-                            info.element_count = value;
+                            info.element_count = target_define_node->value;
                             break;
                         }
                         target_define_node = target_define_node->p_next;
                     }
-                    // 完全匹配但没有找到
+                    // 遍历完成但没有找到
                     if (target_define_node == nullptr)
                     {
-                        printf("\n");
-                        print_log(LOG_WARN, "%s [%s -> 1]\n", "Unknown value context,set to default:", define_str);
-                        printf("\n");
-                        info.element_count = 1;
+                        // printf("\n");
+                        // log_printf(LOG_WARN, "%s [%s -> 1]\n", "Unknown value context,set to default:", define_str);
+                        // printf("\n");
+                        info.element_count = 0;
                     }
                     break;
                 }
@@ -438,174 +406,107 @@ variable_info solve_base_variable(const char *str)
 
         if (buff[count] == ' ' || buff[count] == '=' || buff[count] == ';') // 是单个变量
         {
-            if (info.element_count == 0)
-                info.element_count = 1;
+            info.element_count = 1;
             break;
         }
 
         info.name_str[count] = buff[count]; // 复制变量名
     }
 
+    // 不支持类型直接回传
+    if (info.type == TYPE_UNKNOWN)
+        info.element_count = 0;
+
     return info;
 }
 
-// 解析变量类型
-variable_type_enum get_variable_type(const char *str)
+// 获取变量地址
+uint32_t get_variable_addr32(const char *v_name_str)
 {
-    variable_type_enum type = get_variable_base_type(str);
-    if (type != TYPE_NOT_SUPPORTED)
-        return type;
-
-    // 遍历复合类型
-    type_node *target_node = type_list_head;
-    while (target_node != nullptr)
+    uint32_t addr32 = 0;
+    // 查找地址
+    if (input_map_file != nullptr)
     {
-        if (!strcmp(str, target_node->type_name_str))
-            return target_node->type;
-        target_node = target_node->p_next;
-    }
+        // 回退到起始位置
+        fseek(input_map_file, 0, SEEK_SET);
+        char segment_buff[SEGMENT_BUFF_LENGTH] = {'\0'};
 
-    return TYPE_NOT_SUPPORTED;
-}
-
-// 变量解析
-variable_info solve_variable(const char *str)
-{
-    variable_info info;
-
-    char buff[VARIABLE_NAME_LENGTH_MAX] = {'\0'};
-    size_t offset = 0;
-
-    // 跳过前方的修饰段
-    while (true)
-    {
-        sscanf(str + offset, "%s", buff);
-
-        // 不是下列任何的前置修饰符号时跳出
-        if (!(!strcmp("const", buff) || !strcmp("static", buff) || !strcmp("volatile", buff)))
-            break;
-
-        // 是修饰段
-        while (str[offset] != ' ' && str[offset] != '\0') // 跳过当前词组段
-            offset++;
-        while (!isalnum(str[offset]) && str[offset] != '\0') // 前进到有效字符
-            offset++;
-
-        memset(buff, '\0', sizeof(buff));
-    }
-
-    // 读取前段内容并获取元素类型
-    info.type = get_variable_type(buff);
-
-    // 判断是否为结构体类型
-    if (info.type == STRUCTURE)
-    {
-        sprintf(info.A2L_type_str, "STRUCTURE");
-
-        // 匹配类型描述链表位置
-        type_node *target_type = type_list_head;
-        while (target_type != nullptr)
+        bool find = false;
+        // 循环读行
+        while (f_getline(input_map_file, segment_buff, sizeof(segment_buff)) != 0 && !find)
         {
-            if (!strcmp(target_type->type_name_str, buff))
+            // 匹配到变量名称
+            if (strstr(segment_buff, v_name_str))
             {
-                info.type_name_str = target_type->type_name_str;
-                break;
-            }
-            target_type = target_type->p_next;
-        }
+                char *lpTarget = strstr(segment_buff, v_name_str);
+                size_t len = strlen(v_name_str);
 
-        // 读取后段内容
-        sscanf(str + offset + strlen(buff), "%s", buff);
+                // 匹配到的名称是后段中的子段内容---> xxxxx[name]xx
+                if (lpTarget[len] != ' ' && lpTarget[len] != '\r' && lpTarget[len] != '\n')
+                    continue;
+                // 匹配到的名称是前段中的字段内容---> xx[name]xxxxx
+                if (*(lpTarget - 1) != '_' && *(lpTarget - 1) != ' ' && *(lpTarget - 1) != '@')
+                    continue;
 
-        // 获取名字和长度
-        for (int count = 0; count < VARIABLE_NAME_LENGTH_MAX; count++)
-        {
-            if (buff[count] == '[') // 识别到数组
-            {
-                for (int n = count + 1; n < VARIABLE_NAME_LENGTH_MAX; n++)
+                find = true;
+
+                // 回退指针到地址串起始位置
+                while (*(lpTarget - 1) != ' ')
+                    lpTarget--;
+                while (*(lpTarget - 1) == ' ')
+                    lpTarget--;
+                while (*(lpTarget - 1) != ' ')
+                    lpTarget--;
+
+                char addr_str[20];
+                sscanf(lpTarget, "%s", addr_str);
+
+                // 16进制转换
+                for (int count = 0; count < 20; count++)
                 {
-                    if (buff[n] == ']')
+                    if (!isalnum(addr_str[count]))
                         break;
-                    if (isdigit(buff[n]))
-                        info.element_count = info.element_count * 10 + buff[n] - '0';
+
+                    if (isalpha(addr_str[count]))
+                        addr32 = addr32 * 16 + toupper(addr_str[count]) - 'A' + 10;
                     else
-                    {
-
-                        /**
-                         * @todo
-                         * 添加宏定义识别，先暂时将不支持的量定义为1
-                         */
-                        // 处理宏定义常量
-                        char define_str[VARIABLE_NAME_LENGTH_MAX] = {'\0'};
-                        for (int count = 0; count < VARIABLE_NAME_LENGTH_MAX; count++)
-                            if (buff[n + count] == ']')
-                                break;
-                            else
-                                define_str[count] = buff[n + count];
-
-                        // 进行匹配
-                        define_node *target_define_node = define_list_head;
-                        while (target_define_node != nullptr)
-                        {
-                            // 找到宏定义了
-                            if (!strcmp(target_define_node->define_str, define_str))
-                            {
-                                int value = 1;
-                                sscanf(target_define_node->context_str, "%d", &value);
-                                info.element_count = value;
-                                break;
-                            }
-                            target_define_node = target_define_node->p_next;
-                        }
-                        // 完全匹配但没有找到
-                        if (target_define_node == nullptr)
-                        {
-                            printf("\n");
-                            print_log(LOG_WARN, "%s [%s -> 1]\n", "Unknown value context,set to default:", define_str);
-                            printf("\n");
-                            info.element_count = 1;
-                        }
-                        break;
-                    }
+                        addr32 = addr32 * 16 + addr_str[count] - '0';
                 }
-
-                break;
             }
-
-            if (buff[count] == ' ' || buff[count] == '=' || buff[count] == ';') // 是单个变量
-            {
-                if (info.element_count == 0)
-                    info.element_count = 1;
-                break;
-            }
-
-            info.name_str[count] = buff[count]; // 复制变量名
         }
-
-        return info;
     }
-    return solve_base_variable(str);
+
+    return addr32;
 }
 
 // 日志输出
-void print_log(log_type_enum log_type, const char *p_format_str, ...)
+void log_printf(log_type_enum log_type, const char *p_format_str, ...)
 {
+    time_t timestamp;
+    time(&timestamp);
+    struct tm *timeinfo;
+    timeinfo = localtime(&timestamp);
+
+    // 输出时间戳
+    printf("[%02d:%02d:%02d]@", timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+
+    // 输出日志类型
     switch (log_type)
     {
     case LOG_SUCCESS:
-        printf("[-  OK  -] ");
+        printf("[-    OK    -]  ");
         break;
     case LOG_WARN:
-        printf("[+ WARN +] ");
+        printf("[+   WARN   +]  ");
         break;
     case LOG_FAILURE:
-        printf("[< FAIL >] ");
+        printf("[<   FAIL   >]  ");
         break;
-    case LOG_NORMAL:
-        printf("[  INFO  ] ");
+    case LOG_INFO:
+        printf("[    INFO    ]  ");
         break;
-    case LOG_ERROR:
-        printf("[# ERRO #] ");
+    case LOG_SYS_INFO:
+        printf("[# SYS_INFO #]  ");
         break;
     }
 
@@ -613,4 +514,417 @@ void print_log(log_type_enum log_type, const char *p_format_str, ...)
     va_list args;
     va_start(args, p_format_str);
     vprintf(p_format_str, args);
+    printf("\n");
 }
+
+// 清理和退出
+void clean_and_exit(int exit_code)
+{
+    // 关闭文件
+    fclose(input_reference_A2L_file);
+    fclose(input_map_file);
+    fclose(output_target_A2L_file);
+    fclose(output_middleware_file);
+
+    // 释放分配的全局内存
+    {
+        type_node *p_type_node = type_list_head;
+        while (p_type_node != nullptr)
+        {
+            type_node *temp = p_type_node;
+            p_type_node = p_type_node->p_next;
+            free(temp);
+        }
+
+        define_node *p_define_node = define_list_head;
+        while (p_define_node != nullptr)
+        {
+            define_node *temp = p_define_node;
+            p_define_node = p_define_node->p_next;
+            free(temp);
+        }
+
+        file_node *p_file_node = source_and_header_file_list_head;
+        while (p_file_node != nullptr)
+        {
+            file_node *temp = p_file_node;
+            p_file_node = p_file_node->p_next;
+            free(temp);
+        }
+    }
+
+    log_printf(LOG_SYS_INFO, "All resources cleaned.Now exit.");
+    exit(exit_code);
+}
+
+// 输出标定量
+void f_print_calibration(FILE *file, variable_info v_info)
+{
+    // 类型名称
+    const char *type_str[] = {
+        "TYPE_UNKNOWN", // 未知类型
+        "STRUCTURE",    // 结构体类型
+        "UBYTE",        // uint8_t,bool,boolean_t
+        "UWORD",        // uint16_t
+        "ULONG",        // uint32_t
+        "SBYTE",        // int8_t
+        "SWORD",        // int16_t
+        "SLONG",        // int32_t
+        "FLOAT32_IEEE", // float
+        "FLOAT64_IEEE", // double
+    };
+
+    // 下限字符串
+    const char *min_str[] = {
+        "0",           // 未知类型
+        "0",           // 结构体类型
+        "0",           // uint8_t,bool,boolean_t
+        "0",           // uint16_t
+        "0",           // uint32_t
+        "-128",        // int8_t
+        "-32768",      // int16_t
+        "-2147483648", // int32_t
+        "-3.4E+38",    // float
+        "-1.7E+308",   // double
+    };
+
+    // 上限字符串
+    const char *max_str[] = {
+        "0",          // 未知类型
+        "0",          // 结构体类型
+        "255",        // uint8_t,bool,boolean_t
+        "65535",      // uint16_t
+        "4294967295", // uint32_t
+        "127",        // int8_t
+        "32767",      // int16_t
+        "2147483647", // int32_t
+        "3.4E+38",    // float
+        "1.7E+308",   // double
+    };
+
+    // 类型长度
+    const size_t type_size[] = {
+        0, // 未知类型
+        0, // 结构体类型
+        1, // uint8_t,bool,boolean_t
+        2, // uint16_t
+        4, // uint32_t
+        1, // int8_t
+        2, // int16_t
+        4, // int32_t
+        4, // float
+        8, // double
+    };
+
+    // 获取地址
+    uint32_t start_addr_32 = get_variable_addr32(v_info.name_str);
+    uint32_t addr_offset = 0;   // 地址偏移
+    uint32_t alignment_max = 0; // 出现的最大对齐（用于结构体末尾补齐空位）
+
+    // 遍历每个元素
+    for (size_t count = 0; count < v_info.element_count; count++)
+    {
+        // 匹配类型描述链表位置
+        type_node *target_type = type_list_head;
+        // 数组子元素列表
+        sub_element_node *element_node = nullptr;
+
+        // 结构体类型时查找类型链表
+        if (v_info.type == STRUCTURE)
+        {
+            while (target_type != nullptr)
+            {
+                if (!strcmp(target_type->type_name_str, v_info.type_name_str))
+                    break;
+                target_type = target_type->p_next;
+            }
+            element_node = target_type->element_list_head;
+        }
+
+        // 输出名称及类型
+        char *out_name = nullptr;
+        variable_type_enum out_type = TYPE_UNKNOWN;
+
+        do
+        {
+            size_t sub_element_count = 1;
+            // 分配名称空间
+            if (v_info.type == STRUCTURE)
+            {
+                out_name = (char *)malloc(strlen(v_info.name_str) + strlen(element_node->element_info.name_str) + 10);
+                sub_element_count = element_node->element_info.element_count;
+                out_type = element_node->element_info.type;
+            }
+            else
+            {
+                out_name = (char *)malloc(strlen(v_info.name_str) + 10);
+                out_type = v_info.type;
+            }
+
+            for (size_t sub_count = 0; sub_count < sub_element_count; sub_count++)
+            {
+                // 计算出现的最大对齐
+                if (alignment_max < (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE))
+                    alignment_max = (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE);
+
+                // 地址对齐
+                if (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) != 0)
+                    addr_offset += (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) - (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE));
+
+                // 拼接输出名称
+                if (v_info.type == STRUCTURE)
+                {
+                    if (v_info.element_count == 1)
+                    {
+                        if (sub_element_count == 1)
+                            sprintf(out_name, "%s.%s", v_info.name_str, element_node->element_info.name_str);
+                        else
+                            sprintf(out_name, "%s.%s[%d]", v_info.name_str, element_node->element_info.name_str, sub_count);
+                    }
+                    else
+                    {
+                        if (sub_element_count == 1)
+                            sprintf(out_name, "%s[%d].%s", v_info.name_str, count, element_node->element_info.name_str);
+                        else
+                            sprintf(out_name, "%s[%d].%s[%d]", v_info.name_str, count, element_node->element_info.name_str, sub_count);
+                    }
+                }
+                else
+                {
+                    if (v_info.element_count == 1)
+                        sprintf(out_name, "%s", v_info.name_str);
+                    else
+                        sprintf(out_name, "%s[%d]", v_info.name_str, count);
+                }
+
+                fprintf(output_middleware_file, "%s\r\n", "/begin CHARACTERISTIC");                                             // 标定量头
+                fprintf(output_middleware_file, "    /* Name                   */    %s\r\n", out_name);                        // 名称
+                fprintf(output_middleware_file, "    /* Long Identifier        */    \"Auto generated by SrcToA2L\"\r\n");      // 描述
+                fprintf(output_middleware_file, "    /* Type                   */    %s\r\n", "VALUE");                         // 值类型(数值、数组、曲线)
+                fprintf(output_middleware_file, "    /* ECU Address            */    0x%08X\r\n", start_addr_32 + addr_offset); // ECU 地址
+                fprintf(output_middleware_file, "    /* Record Layout          */    Scalar_%s\r\n", type_str[out_type]);       // 数据类型
+                fprintf(output_middleware_file, "    /* Maximum Difference     */    %s\r\n", "0");                             // 允许最大差分
+                fprintf(output_middleware_file, "    /* Conversion Method      */    %s\r\n", "NO_COMPU_METHOD");               // 转换式(保留原始值)
+                fprintf(output_middleware_file, "    /* Lower Limit            */    %s\r\n", min_str[out_type]);               // 下限
+                fprintf(output_middleware_file, "    /* Upper Limit            */    %s\r\n", max_str[out_type]);               // 上限
+                fprintf(output_middleware_file, "%s\r\n\r\n", "/end CHARACTERISTIC");                                           // 标定量尾
+
+                // 递增地址偏移
+                addr_offset += type_size[out_type];
+            }
+
+            free(out_name);
+
+            if (element_node != nullptr)
+                element_node = element_node->p_next;
+        } while (element_node != nullptr);
+
+        // 补齐结构体末尾的空余字节偏移
+        if (v_info.type == STRUCTURE)
+            if (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) != 0)
+                addr_offset += (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) - (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE));
+    }
+
+    // 输出日志
+    if (start_addr_32 != 0 || input_map_file == nullptr)
+    {
+        if (v_info.element_count > 1)
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s[%d]", "Calibration", type_str[v_info.type], start_addr_32, v_info.name_str, v_info.element_count);
+        else
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s", "Calibration", type_str[v_info.type], start_addr_32, v_info.name_str);
+    }
+    else
+    {
+        if (v_info.element_count > 1)
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X    %s[%d]", "Calibration", type_str[v_info.type], start_addr_32, v_info.name_str, v_info.element_count);
+        else
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X    %s", "Calibration", type_str[v_info.type], start_addr_32, v_info.name_str);
+    }
+}
+
+// 输出观测量
+void f_print_measurement(FILE *file, variable_info v_info)
+{
+    // 类型名称
+    const char *type_str[] = {
+        "TYPE_UNKNOWN", // 未知类型
+        "STRUCTURE",    // 结构体类型
+        "UBYTE",        // uint8_t,bool,boolean_t
+        "UWORD",        // uint16_t
+        "ULONG",        // uint32_t
+        "SBYTE",        // int8_t
+        "SWORD",        // int16_t
+        "SLONG",        // int32_t
+        "FLOAT32_IEEE", // float
+        "FLOAT64_IEEE", // double
+    };
+
+    // 下限字符串
+    const char *min_str[] = {
+        "0",           // 未知类型
+        "0",           // 结构体类型
+        "0",           // uint8_t,bool,boolean_t
+        "0",           // uint16_t
+        "0",           // uint32_t
+        "-128",        // int8_t
+        "-32768",      // int16_t
+        "-2147483648", // int32_t
+        "-3.4E+38",    // float
+        "-1.7E+308",   // double
+    };
+
+    // 上限字符串
+    const char *max_str[] = {
+        "0",          // 未知类型
+        "0",          // 结构体类型
+        "255",        // uint8_t,bool,boolean_t
+        "65535",      // uint16_t
+        "4294967295", // uint32_t
+        "127",        // int8_t
+        "32767",      // int16_t
+        "2147483647", // int32_t
+        "3.4E+38",    // float
+        "1.7E+308",   // double
+    };
+
+    // 类型长度
+    const size_t type_size[] = {
+        0, // 未知类型
+        0, // 结构体类型
+        1, // uint8_t,bool,boolean_t
+        2, // uint16_t
+        4, // uint32_t
+        1, // int8_t
+        2, // int16_t
+        4, // int32_t
+        4, // float
+        8, // double
+    };
+
+    // 获取地址
+    uint32_t start_addr_32 = get_variable_addr32(v_info.name_str);
+    uint32_t addr_offset = 0;   // 地址偏移
+    uint32_t alignment_max = 0; // 出现的最大对齐（用于结构体末尾补齐空位）
+
+    // 遍历每个元素
+    for (size_t count = 0; count < v_info.element_count; count++)
+    {
+        // 匹配类型描述链表位置
+        type_node *target_type = type_list_head;
+        // 数组子元素列表
+        sub_element_node *element_node = nullptr;
+
+        // 结构体类型时查找类型链表
+        if (v_info.type == STRUCTURE)
+        {
+            while (target_type != nullptr)
+            {
+                if (!strcmp(target_type->type_name_str, v_info.type_name_str))
+                    break;
+                target_type = target_type->p_next;
+            }
+            element_node = target_type->element_list_head;
+        }
+
+        // 输出名称及类型
+        char *out_name = nullptr;
+        variable_type_enum out_type = TYPE_UNKNOWN;
+
+        do
+        {
+            size_t sub_element_count = 1;
+            // 分配名称空间
+            if (v_info.type == STRUCTURE)
+            {
+                out_name = (char *)malloc(strlen(v_info.name_str) + strlen(element_node->element_info.name_str) + 10);
+                sub_element_count = element_node->element_info.element_count;
+                out_type = element_node->element_info.type;
+            }
+            else
+            {
+                out_name = (char *)malloc(strlen(v_info.name_str) + 10);
+                out_type = v_info.type;
+            }
+
+            for (size_t sub_count = 0; sub_count < sub_element_count; sub_count++)
+            {
+                // 计算出现的最大对齐
+                if (alignment_max < (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE))
+                    alignment_max = (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE);
+
+                // 地址对齐
+                if (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) != 0)
+                    addr_offset += (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) - (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE));
+
+                // 拼接输出名称
+                if (v_info.type == STRUCTURE)
+                {
+                    if (v_info.element_count == 1)
+                    {
+                        if (sub_element_count == 1)
+                            sprintf(out_name, "%s.%s", v_info.name_str, element_node->element_info.name_str);
+                        else
+                            sprintf(out_name, "%s.%s[%d]", v_info.name_str, element_node->element_info.name_str, sub_count);
+                    }
+                    else
+                    {
+                        if (sub_element_count == 1)
+                            sprintf(out_name, "%s[%d].%s", v_info.name_str, count, element_node->element_info.name_str);
+                        else
+                            sprintf(out_name, "%s[%d].%s[%d]", v_info.name_str, count, element_node->element_info.name_str, sub_count);
+                    }
+                }
+                else
+                {
+                    if (v_info.element_count == 1)
+                        sprintf(out_name, "%s", v_info.name_str);
+                    else
+                        sprintf(out_name, "%s[%d]", v_info.name_str, count);
+                }
+
+                fprintf(output_middleware_file, "%s\r\n", "/begin MEASUREMENT");                                                                     // 观测量头
+                fprintf(output_middleware_file, "    /* Name                   */    %s\r\n", out_name);                                             // 名称
+                fprintf(output_middleware_file, "    /* Long identifier        */    \"Auto generated by SrcToA2L\"\r\n");                           // 描述
+                fprintf(output_middleware_file, "    /* Data type              */    %s\r\n", type_str[out_type]);                                   // 数据类型
+                fprintf(output_middleware_file, "    /* Conversion method      */    %s\r\n", "NO_COMPU_METHOD");                                    // 转换式(保留原始值)
+                fprintf(output_middleware_file, "    /* Resolution (Not used)  */    %s\r\n", "0");                                                  // 分辨率
+                fprintf(output_middleware_file, "    /* Accuracy (Not used)    */    %s\r\n", "0");                                                  // 精度误差
+                fprintf(output_middleware_file, "    /* Lower limit            */    %s\r\n", min_str[out_type]);                                    // 下限
+                fprintf(output_middleware_file, "    /* Upper limit            */    %s\r\n", max_str[out_type]);                                    // 上限
+                fprintf(output_middleware_file, "    /* ECU Address            */    %s    0x%08X\r\n", "ECU_ADDRESS", start_addr_32 + addr_offset); // ECU 地址
+                fprintf(output_middleware_file, "%s\r\n\r\n", "/end MEASUREMENT");                                                                   // 观测量尾
+
+                // 递增地址偏移
+                addr_offset += type_size[out_type];
+            }
+
+            free(out_name);
+
+            if (element_node != nullptr)
+                element_node = element_node->p_next;
+        } while (element_node != nullptr);
+
+        // 补齐结构体末尾的空余字节偏移
+        if (v_info.type == STRUCTURE)
+            if (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) != 0)
+                addr_offset += (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) - (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE));
+    }
+
+    // 输出日志
+    if (start_addr_32 != 0 || input_map_file == nullptr)
+    {
+        if (v_info.element_count > 1)
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s[%d]", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str, v_info.element_count);
+        else
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str);
+    }
+    else
+    {
+        if (v_info.element_count > 1)
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X    %s[%d]", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str, v_info.element_count);
+        else
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X    %s", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str);
+    }
+}
+
+// End

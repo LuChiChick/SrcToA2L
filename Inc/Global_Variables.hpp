@@ -13,8 +13,8 @@ extern type_node *type_list_head;
 // 宏定义列表
 extern define_node *define_list_head;
 
-// 源文件列表
-extern file_node *source_file_list_head;
+// 源文件及头文件列表
+extern file_node *source_and_header_file_list_head;
 
 // 文件指针
 extern FILE *input_reference_A2L_file;
