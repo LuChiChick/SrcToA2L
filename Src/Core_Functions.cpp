@@ -446,15 +446,36 @@ void solve_types(void)
             // 检测到类型定义起始
             if (strstr(segment_buff, "typedef"))
             {
+                char *p_typedef = (strstr(segment_buff, "typedef"));
+                // 过滤非独立的typedef
+                if (isalnum(*(p_typedef - 1)) || *(p_typedef - 1) == '_' || *(p_typedef + strlen("typedef")) != ' ')
+                    break;
+
+                // 过滤处在字符串中的typedef
+                if (strstr(segment_buff, "\""))
+                {
+                    bool pre_quote = false;
+                    for (const char *p_str = p_typedef; p_str != segment_buff; p_str--)
+                        if (*p_str == '\"')
+                            pre_quote = true;
+
+                    bool end_quote = false;
+                    for (const char *p_str = p_typedef; p_str != segment_buff + strlen(segment_buff); p_str++)
+                        if (*p_str == '\"')
+                            end_quote = true;
+
+                    if (pre_quote && end_quote)
+                        break;
+                }
 
                 // 回退到typedef之后重新读取
-                fseek(target_file, -(strlen(segment_buff) - strlen("typedef") - (strstr(segment_buff, "typedef") - segment_buff)), SEEK_CUR);
+                fseek(target_file, -(strlen(p_typedef + strlen("typedef"))), SEEK_CUR);
                 f_seek_skip_comments_and_blanks(target_file);
                 if (f_getline(target_file, segment_buff, sizeof(segment_buff)) == 0)
                     break;
 
                 // 检查是否是支持的类型
-                if (!strstr(segment_buff, "struct"))
+                if (strstr(segment_buff, "struct") != segment_buff)
                 {
                     while (fgetc(target_file) != '}')
                         ;

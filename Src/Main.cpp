@@ -14,7 +14,7 @@ extern "C"
 int main(int argc, char *argv[])
 {
     printf("\n\n");
-    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.0");
+    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.1");
     log_printf(LOG_SYS_INFO, "Auther: LuChiChick");
     log_printf(LOG_SYS_INFO, "%s\n%s\n%s\n\n", "Open source links:",
                "                              ├─Github:              https://git.luchichick.cn/LuChiChick/SrcToA2L",
