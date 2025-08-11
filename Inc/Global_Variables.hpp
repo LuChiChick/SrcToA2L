@@ -7,6 +7,9 @@ extern "C"
 #include "stdio.h"
 }
 
+// 地址对齐长度
+extern size_t addr_alignment_size;
+
 // 类型列表
 extern type_node *type_list_head;
 

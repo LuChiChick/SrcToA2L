@@ -664,12 +664,12 @@ void f_print_calibration(FILE *file, variable_info v_info)
             for (size_t sub_count = 0; sub_count < sub_element_count; sub_count++)
             {
                 // 计算出现的最大对齐
-                if (alignment_max < (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE))
-                    alignment_max = (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE);
+                if (alignment_max < (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size))
+                    alignment_max = (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size);
 
                 // 地址对齐
-                if (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) != 0)
-                    addr_offset += (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) - (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE));
+                if (addr_offset % (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size) != 0)
+                    addr_offset += (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size) - (addr_offset % (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size));
 
                 // 拼接输出名称
                 if (v_info.type == STRUCTURE)
@@ -721,8 +721,8 @@ void f_print_calibration(FILE *file, variable_info v_info)
 
         // 补齐结构体末尾的空余字节偏移
         if (v_info.type == STRUCTURE)
-            if (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) != 0)
-                addr_offset += (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) - (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE));
+            if (addr_offset % (alignment_max < addr_alignment_size ? alignment_max : addr_alignment_size) != 0)
+                addr_offset += (alignment_max < addr_alignment_size ? alignment_max : addr_alignment_size) - (addr_offset % (alignment_max < addr_alignment_size ? alignment_max : addr_alignment_size));
     }
 
     // 输出日志
@@ -849,12 +849,12 @@ void f_print_measurement(FILE *file, variable_info v_info)
             for (size_t sub_count = 0; sub_count < sub_element_count; sub_count++)
             {
                 // 计算出现的最大对齐
-                if (alignment_max < (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE))
-                    alignment_max = (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE);
+                if (alignment_max < (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size))
+                    alignment_max = (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size);
 
                 // 地址对齐
-                if (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) != 0)
-                    addr_offset += (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE) - (addr_offset % (type_size[out_type] < ADDR_ALIGNMENT_SIZE ? type_size[out_type] : ADDR_ALIGNMENT_SIZE));
+                if (addr_offset % (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size) != 0)
+                    addr_offset += (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size) - (addr_offset % (type_size[out_type] < addr_alignment_size ? type_size[out_type] : addr_alignment_size));
 
                 // 拼接输出名称
                 if (v_info.type == STRUCTURE)
@@ -906,8 +906,8 @@ void f_print_measurement(FILE *file, variable_info v_info)
 
         // 补齐结构体末尾的空余字节偏移
         if (v_info.type == STRUCTURE)
-            if (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) != 0)
-                addr_offset += (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE) - (addr_offset % (alignment_max < ADDR_ALIGNMENT_SIZE ? alignment_max : ADDR_ALIGNMENT_SIZE));
+            if (addr_offset % (alignment_max < addr_alignment_size ? alignment_max : addr_alignment_size) != 0)
+                addr_offset += (alignment_max < addr_alignment_size ? alignment_max : addr_alignment_size) - (addr_offset % (alignment_max < addr_alignment_size ? alignment_max : addr_alignment_size));
     }
 
     // 输出日志

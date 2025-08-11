@@ -25,6 +25,28 @@ void solve_args(int argc, char *argv[])
         if (argv[count][0] == '-')
         {
 
+            // -a 字节对齐长度设置
+            if (!strcmp(argv[count], "-a"))
+            {
+                // 错误输入处理
+                if (count + 1 == argc)
+                    break;
+                if (argv[count + 1][0] == '-')
+                    continue;
+
+                size_t value = 0;
+                sscanf(argv[count + 1], "%u", &value);
+                if ((value % 2 == 0 && value != 0) || value == 1)
+                {
+                    log_printf(LOG_SUCCESS, "Alignment size set to %u.", value);
+                    addr_alignment_size = value;
+                }
+                else
+                    log_printf(LOG_FAILURE, "Illegal alignment arg \"%s\", set to default %u.", argv[count + 1], addr_alignment_size);
+                count++;
+                continue;
+            }
+
             // -r 参考A2L输入
             if (!strcmp(argv[count], "-r"))
             {
@@ -175,6 +197,7 @@ void solve_args(int argc, char *argv[])
     {
         printf("\n");
         log_printf(LOG_INFO, "Workflow details:");
+        printf("                              ├─Alignment size: %u\n", addr_alignment_size);
         printf("                              ├─Source or header files:\n");
 
         // 遍历文件链表

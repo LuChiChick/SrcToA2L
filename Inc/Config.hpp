@@ -1,7 +1,7 @@
 #ifndef __CONFIG_HPP__
 #define __CONFIG_HPP__
 
-#define ADDR_ALIGNMENT_SIZE 4 // 地址对齐方式
+#define DEFAULT_ADDR_ALIGNMENT_SIZE 4 // 默认地址对齐长度
 
 #define VARIABLE_NAME_STR_LENGTH_MAX 100 // 名称字符串最大长度
 
