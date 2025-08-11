@@ -14,7 +14,7 @@ extern "C"
 int main(int argc, char *argv[])
 {
     printf("\n\n");
-    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.1");
+    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.2");
     log_printf(LOG_SYS_INFO, "Auther: LuChiChick");
     log_printf(LOG_SYS_INFO, "%s\n%s\n%s\n\n", "Open source links:",
                "                              ├─Github:              https://git.luchichick.cn/LuChiChick/SrcToA2L",
@@ -34,6 +34,11 @@ int main(int argc, char *argv[])
     printf("\n\n");
     log_printf(LOG_SYS_INFO, "Start compound type definition solve.\n\n");
     solve_types();
+
+    // 处理记录布局
+    printf("\n\n");
+    log_printf(LOG_SYS_INFO, "Start record layout solve.\n\n");
+    solve_record_layout();
 
     // 处理中间件
     printf("\n\n");

@@ -13,6 +13,9 @@ void solve_defines(void);
 // 类型解析
 void solve_types(void);
 
+// 记录布局解析（标定量使用）
+void solve_record_layout(void);
+
 // 处理中间件
 void solve_middleware(void);
 

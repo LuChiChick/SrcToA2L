@@ -815,10 +815,104 @@ void solve_types(void)
     }
 }
 
+// 记录布局解析（标定量使用）
+void solve_record_layout(void)
+{
+    // 记录布局名串
+    const char *record_type[8] =
+        {
+            "Scalar_UBYTE",
+            "Scalar_UWORD",
+            "Scalar_ULONG",
+            "Scalar_SBYTE",
+            "Scalar_SWORD",
+            "Scalar_SLONG",
+            "Scalar_FLOAT32_IEEE",
+            "Scalar_FLOAT64_IEEE",
+        };
+
+    // 布局存在与否
+    bool find_flag[8] =
+        {
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+        };
+
+    if (input_reference_A2L_file != nullptr)
+    {
+
+        // 回到文件起始
+        fseek(input_reference_A2L_file, 0, SEEK_SET);
+        // 段缓冲区
+        char segment_buff[SEGMENT_BUFF_LENGTH] = {'\0'};
+
+        // 从头到尾检查A2L中的RECORD_LAYOUT类型
+        while (f_getline(input_reference_A2L_file, segment_buff, sizeof(segment_buff)) != 0)
+        {
+            // 当前行为 RECORD_LAYOUT
+            if (strstr(segment_buff, "RECORD_LAYOUT"))
+            {
+                // 指针跳转到RECORD_LAYOUT后第一个有效字符
+                char *p_record_str = strstr(segment_buff, "RECORD_LAYOUT") + strlen("RECORD_LAYOUT");
+                size_t segment_len = strlen(segment_buff);
+                while (*p_record_str != '\n' && p_record_str != segment_buff + segment_len)
+                {
+                    if (isalpha(*p_record_str) || *p_record_str == '_')
+                        break;
+                    p_record_str++;
+                }
+
+                // 挨个检查
+                for (int count = 0; count < 8; count++)
+                {
+                    if (find_flag[count])
+                        continue;
+                    if (strstr(p_record_str, record_type[count]))
+                        find_flag[count] = true;
+                }
+            }
+        }
+    }
+
+    bool all_clear = true;
+    for (int count = 0; count < 8; count++)
+        if (!find_flag[count])
+            all_clear = false;
+
+    // 补全输出
+    if (!all_clear)
+    {
+        fprintf(output_middleware_file, "\r\n\r\n");
+        fprintf(output_middleware_file, "%s\r\n\r\n\r\n", START_OF_GENERATED_RECORD_LAYOUT_STR);
+
+        for (int count = 0; count < 8; count++)
+        {
+            if (find_flag[count])
+                continue;
+            log_printf(LOG_SUCCESS, "Add missing record layout \"%s\"", record_type[count]);
+
+            fprintf(output_middleware_file, "/begin RECORD_LAYOUT    %s\r\n", record_type[count]);
+            fprintf(output_middleware_file, "    FNC_VALUES     1    %s COLUMN_DIR DIRECT\r\n", record_type[count] + strlen("Scalar_"));
+            fprintf(output_middleware_file, "/end   RECORD_LAYOUT\r\n\r\n");
+        }
+
+        fprintf(output_middleware_file, "\r\n");
+        fprintf(output_middleware_file, "%s\r\n", END_OF_GENERATED_RECORD_LAYOUT_STR);
+    }
+}
+
 // 处理中间件
 void solve_middleware(void)
 {
-    fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n", START_OF_GENERATED_PATTERN_STR);
+    // 抬头输出
+    bool head_output = false;
+
     file_node *target_file_node = source_and_header_file_list_head;
 
     // 循环处理输入文件
@@ -835,6 +929,12 @@ void solve_middleware(void)
             // 检测到标定量起始行
             if (strstr(segment_buff, START_OF_CALIBRATION_PATTERN_STR))
             {
+                if (!head_output)
+                {
+                    fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n\r\n", START_OF_GENERATED_CALIBRATION_AND_MEASURMENT_STR);
+                    head_output = true;
+                }
+
                 do
                 {
                     // 跳过空白部分
@@ -855,6 +955,12 @@ void solve_middleware(void)
             // 观测量起始行
             if (strstr(segment_buff, START_OF_MEASURMENT_PATTERN_STR))
             {
+                if (!head_output)
+                {
+                    fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n", START_OF_GENERATED_CALIBRATION_AND_MEASURMENT_STR);
+                    head_output = true;
+                }
+
                 do
                 {
                     // 跳过空白部分
@@ -877,12 +983,16 @@ void solve_middleware(void)
         target_file_node = target_file_node->p_next;
     }
 
-    fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n", END_OF_GENERATED_PATTERN_STR);
+    if (head_output)
+        fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n", END_OF_GENERATED_CALIBRATION_AND_MEASURMENT_STR);
 }
 
 // 处理最终A2L输出
 void solve_A2L_output(void)
 {
+    // 回到文件起始
+    fseek(input_reference_A2L_file, 0, SEEK_SET);
+
     // 段缓冲区
     char segment_buff[SEGMENT_BUFF_LENGTH] = {'\0'};
 
