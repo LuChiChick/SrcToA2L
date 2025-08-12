@@ -1,161 +1,223 @@
 # 目标文件名称
 TARGET_FILE_NAME = SrcToA2L
 
-# 编译路径
+# 编译目录
 BUILD_DIR = Build
 
-# 工具链前缀
-PREFIX = \
+# Release 编译子目录
+SUB_DIR_RELEASE = Release
 
-# 调试选项
-DEBUG = 1
+# Debug 编译子目录
+SUB_DIR_DEBUG = Debug
 
-# GUI或CUI编译选项
+# Release 优化等级
+RELEASE_OPT = -Os
+
+# Debug 优化等级
+DEBUG_OPT = -O0
+
+# GUI或CUI编译选项 [0]CUI/Console [1]GUI
 GUI = 0
 
-# C编译标准，等号后面不能有空格
-C_STD =c17
+# C编译标准
+C_STD = c17
 
-# C++编译标准，等号后面不能有空格
-CXX_STD =c++17
+# C++编译标准
+CXX_STD = c++17
 
-#输入源文件字符编码定义，等号后不能有空格
-INPUT_CHAR_CODING =UTF-8
+# 源文件编码定义
+INPUT_CHAR_ENCODING = UTF-8
 
-#输出单字节字符编码定义，等号后不能有空格
-OUTPUT_CHAR_CODING =GBK
+# 编译产物单字节字符(char)编码定义
+OUTPUT_CHAR_ENCODING = GBK
 
-#输出宽字符编码定义，等号后不能有空格
-OUTPUT_WCHAR_CODING =UTF-16LE
+# 编译产物宽字符(wchar_t)编码定义
+OUTPUT_WCHAR_ENCODING = UTF-16LE
 
-# 优化等级
-OPT = -Og
+# 编译工具前缀
+COMPLIER_PREFIX =	\
 
 # C编译工具
-CC = $(PREFIX)gcc
+C_COMPLIER = $(strip $(COMPLIER_PREFIX))gcc
 
 # C++编译工具
-CXX = $(PREFIX)g++
+C++_COMPLIER = $(strip $(COMPLIER_PREFIX))g++
 
-# Win32 资源文件编译工具
-WIN32_RES = windres
+# Windows 资源文件编译工具
+WIN_RES_COMPLIER = windres
+
+##################################################################################
 
 # 链接库
-LIB_LINK = 	\
+LIB_LINK = 			\
 
 # C定义
-C_DEFS =  \
--D_UNICODE	\
--DUNICODE
+C_DEFS =			\
+_UNICODE			\
+UNICODE				\
 
 # C头文件目录
-C_INCLUDES =  \
+C_INCLUDES_PATHS =	\
 
-# C源文件
-C_SOURCES =  \
+# C源文件目录
+C_SOURCES_PATHS =	\
+
+# C额外单个源文件
+C_EXTERA_SOURCES =	\
 
 # C++定义
-CXX_DEFS =  \
+CXX_DEFS =			\
+_UNICODE			\
+UNICODE				\
 
 # C++ 头文件目录
-CXX_INCLUDES =  \
--IInc	\
+CXX_INCLUDES_PATHS =	\
+Inc						\
 
-# C++源文件
-CXX_SOURCES = \
-Src/Main.cpp 				\
-Src/Tool_Functions.cpp 		\
-Src/Core_Functions.cpp		\
-Src/Global_Variables.cpp	\
+# C++源文件目录
+CXX_SOURCES_PATHS =		\
+Src						\
 
-# 资源文件
-WIN32_RES_LISTS = \
+# C++额外单个源文件
+CXX_EXTERA_SOURCES = 	\
+
+# Windows 资源文件脚本头文件路径
+WIN_RESOURCE_INCLUDES_PATHS = 	\
+
+# Windows 资源文件脚本列表
+WIN_RESOURCE_SCRIPTS =			\
+
+##################################################################################
 
 # C编译选项
-CFLAGS = $(C_DEFS) $(C_INCLUDES) $(OPT) -std=$(C_STD) \
-		-finput-charset=$(INPUT_CHAR_CODING) \
-		-fexec-charset=$(OUTPUT_CHAR_CODING) \
-		-fwide-exec-charset=$(OUTPUT_WCHAR_CODING)  \
-		-static \
-		-Wall \
-
-# 生成依赖相关信息
-CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
-
-# 调试选项
-ifeq ($(DEBUG), 1)
-CFLAGS += -g
-endif
-
-# GUI与CUI选项
-ifeq ($(GUI), 1)
-CFLAGS += -mwindows
-else
-CFLAGS += -mconsole
-endif
+CFLAGS = $(foreach text,$(C_DEFS),$(addprefix -D,$(text)))				\
+		 $(foreach path,$(C_INCLUDES_PATHS),$(addprefix -I,$(path))) 	\
+		-std=$(strip $(C_STD))											\
+		-finput-charset=$(strip $(INPUT_CHAR_ENCODING)) 				\
+		-fexec-charset=$(strip $(OUTPUT_CHAR_ENCODING)) 				\
+		-fwide-exec-charset=$(strip $(OUTPUT_WCHAR_ENCODING))			\
+		-static 														\
+		-Wall 															\
+		-MMD -MP -MF"$(@:%.o=%.d)"										\
 
 # C++编译选项
-CXXFLAGS = -lstdc++ $(CFLAGS:$(C_STD)=$(CXX_STD)) $(CXX_DEFS) $(CXX_INCLUDES)
+CXXFLAGS = $(foreach text,$(CXX_DEFS),$(addprefix -D,$(text)))				\
+		   $(foreach path,$(CXX_INCLUDES_PATHS),$(addprefix -I,$(path))) 	\
+		  -std=$(strip $(CXX_STD))											\
+		  -finput-charset=$(strip $(INPUT_CHAR_ENCODING)) 					\
+		  -fexec-charset=$(strip $(OUTPUT_CHAR_ENCODING)) 					\
+		  -fwide-exec-charset=$(strip $(OUTPUT_WCHAR_ENCODING))				\
+		  -static 															\
+		  -Wall 															\
+		  -MMD -MP -MF"$(@:%.o=%.d)"										\
+		  -lstdc++															\
 
-# 链接器选项
-LDFLAGS = -Wl,-Map,$(BUILD_DIR)/$(TARGET_FILE_NAME).map
+# 链接选项
+LDFLAGS = -Wl,-Map,$(basename $@).map \
 
-# C目标文件目录关联
-OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
-vpath %.c $(sort $(dir $(C_SOURCES)))
+##################################################################################
 
-# C++目标文件目录关联
-OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(CXX_SOURCES:.cpp=.o)))
-vpath %.cpp $(sort $(dir $(CXX_SOURCES)))
+# GUI与CUI选项附加
+ifeq ($(GUI), 1)
+LDFLAGS  += -mwindows
+else
+LDFLAGS  += -mconsole
+endif
 
-# 资源文件目录关联
-OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(WIN32_RES_LISTS:.rc=.o)))
-vpath %.rc $(sort $(dir $(WIN32_RES_LISTS)))
+# C目标文件及索引目录关联
+OBJECTS  = $(notdir $(C_EXTERA_SOURCES:.c=.o))
+OBJECTS += $(subst .c,.o,$(notdir $(foreach path,$(C_SOURCES_PATHS),$(wildcard $(path)/*.c))))
+vpath %.c $(sort $(dir $(C_EXTERA_SOURCES))) $(sort $(C_SOURCES_PATHS))
 
-# Make编译任务
-all: $(BUILD_DIR)/$(TARGET_FILE_NAME).exe
+# C++目标文件及索引目录关联
+OBJECTS += $(notdir $(CXX_EXTERA_SOURCES:.cpp=.o))
+OBJECTS += $(subst .cpp,.o,$(notdir $(foreach path,$(CXX_SOURCES_PATHS),$(wildcard $(path)/*.cpp))))
+vpath %.cpp $(sort $(dir $(CXX_EXTERA_SOURCES))) $(sort $(CXX_SOURCES_PATHS))
 
-# C目标文件编译
-$(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
-	@echo ====== C Source File "$<" Compiling... ======
-	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
+# Windows资源文件及索引目录关联
+OBJECTS += $(notdir $(WIN_RESOURCE_SCRIPTS:.rc=.o))
+vpath %.rc $(sort $(dir $(WIN_RESOURCE_SCRIPTS)))
 
-# C++ 目标文件编译编译
-$(BUILD_DIR)/%.o: %.cpp Makefile | $(BUILD_DIR) 
-	@echo ====== C++ Source File "$<" Compiling... ====== 
-	$(CXX) -c $(CXXFLAGS) -Wa,-a,-ad,-ahlms=$(BUILD_DIR)/$(notdir $(<:.cpp=.lst)) $< -o $@
 
-# 资源文件编译编译
-$(BUILD_DIR)/%.o: %.rc Makefile | $(BUILD_DIR) 
-	@echo ====== Win32 Resources File "$<" Compiling... ====== 
-	$(WIN32_RES) $< -o $@
+# Release 目标文件
+RELEASE_OBJECTS = $(addprefix $(BUILD_DIR)/$(SUB_DIR_RELEASE)/,$(OBJECTS))
 
-# 生成可执行文件
-$(BUILD_DIR)/$(TARGET_FILE_NAME).exe: $(OBJECTS) Makefile
-	@echo ====== All File Compiled. Now Linking... ====== 
-	$(CXX) $(CXXFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $(LIB_LINK)
-	@echo ====== Program Link Finished ====== 
+# Debug 目标文件
+DEBUG_OBJECTS = $(addprefix $(BUILD_DIR)/$(SUB_DIR_DEBUG)/,$(OBJECTS))
 
-# 生成编译目录	
+##################################################################################
+
+# all任务 目标为 release 和 debug 产物
+all: $(BUILD_DIR)/$(SUB_DIR_RELEASE)/$(TARGET_FILE_NAME).exe $(BUILD_DIR)/$(SUB_DIR_DEBUG)/$(TARGET_FILE_NAME).exe
+	@echo ====== [All] Build Procedure Accomplished ======
+
+# release任务 目标为 release 产物 
+release: $(BUILD_DIR)/$(SUB_DIR_RELEASE)/$(TARGET_FILE_NAME).exe
+	@echo ====== [Release] Build Procedure Accomplished ======
+
+# debug任务 目标为 debug 产物
+debug: $(BUILD_DIR)/$(SUB_DIR_DEBUG)/$(TARGET_FILE_NAME).exe
+	@echo ====== [Debug] Build Procedure Accomplished ====== 
+
+# 清理任务
+clean: $(BUILD_DIR)
+	powershell rm -r $(BUILD_DIR)
+
+# 构建目录生成
 $(BUILD_DIR):
-	mkdir $@
+	powershell mkdir $@
 
-# 清除任务
-clean:$(BUILD_DIR) 
-	powershell rm -r $(BUILD_DIR)
+# Release 工作目录生成
+$(BUILD_DIR)/$(SUB_DIR_RELEASE): | $(BUILD_DIR)
+	powershell mkdir $@
 
-# 运行任务
-run:all
-	$(BUILD_DIR)/$(TARGET_FILE_NAME).exe
+# Debug 工作目录生成
+$(BUILD_DIR)/$(SUB_DIR_DEBUG): | $(BUILD_DIR)
+	powershell mkdir $@
 
-# 发行编译
-release:$(BUILD_DIR) $(RELEASE_DIR)
-	powershell rm -r $(BUILD_DIR)
-	make DEBUG=0
-	powershell rm $(BUILD_DIR)/*.o
-	powershell rm $(BUILD_DIR)/*.d
-	powershell rm $(BUILD_DIR)/*.lst
-	powershell rm $(BUILD_DIR)/*.map
+# Release 最终可执行文件编译任务
+$(BUILD_DIR)/$(SUB_DIR_RELEASE)/$(TARGET_FILE_NAME).exe: $(RELEASE_OBJECTS)
+	@echo ====== [Release] All File Compiled. Now Linking... ====== 
+	$(C++_COMPLIER) $(RELEASE_OBJECTS) -o $@ $(LIB_LINK) $(LDFLAGS)
+	@echo ====== [Release] Program Link Finished ======
+
+# Debug 最终可执行文件编译任务
+$(BUILD_DIR)/$(SUB_DIR_DEBUG)/$(TARGET_FILE_NAME).exe: $(DEBUG_OBJECTS)
+	@echo ====== [Debug] All File Compiled. Now Linking... ====== 
+	$(C++_COMPLIER) $(DEBUG_OBJECTS) -o $@ $(LIB_LINK) $(LDFLAGS)
+	@echo ====== [Debug] Program Link Finished ====== 
+
+# C Release 目标文件编译
+$(BUILD_DIR)/$(SUB_DIR_RELEASE)%.o: %.c Makefile | $(BUILD_DIR)/$(SUB_DIR_RELEASE)
+	@echo ====== [Release] C Source File "$<" Compiling... ======
+	$(C_COMPLIER) -c $(CFLAGS) $(RELEASE_OPT) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(SUB_DIR_RELEASE)/$(notdir $(<:.c=.lst)) $< -o $@
+
+# C++ Release 目标文件编译
+$(BUILD_DIR)/$(SUB_DIR_RELEASE)/%.o: %.cpp Makefile | $(BUILD_DIR)/$(SUB_DIR_RELEASE)
+	@echo ====== [Release] C++ Source File "$<" Compiling... ====== 
+	$(C++_COMPLIER) -c $(CXXFLAGS) $(RELEASE_OPT) -Wa,-a,-ad,-ahlms=$(BUILD_DIR)/$(SUB_DIR_RELEASE)/$(notdir $(<:.cpp=.lst)) $< -o $@
+
+# Release 资源脚本文件编译
+$(BUILD_DIR)/$(SUB_DIR_RELEASE)/%.o: %.rc Makefile | $(BUILD_DIR)/$(SUB_DIR_RELEASE)
+	@echo ====== [Release] Windows Resource Script File "$<" Compiling... ====== 
+	$(WIN_RES_COMPLIER) $(foreach path,$(WIN_RESOURCE_INCLUDES_PATHS),$(addprefix -I,$(path))) $< -o $@
+
+# C Debug 目标文件编译
+$(BUILD_DIR)/$(SUB_DIR_DEBUG)%.o: %.c Makefile | $(BUILD_DIR)/$(SUB_DIR_DEBUG)
+	@echo ====== [Debug] C Source File "$<" Compiling... ======
+	$(C_COMPLIER) -c $(CFLAGS) $(DEBUG_OPT) -g -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(SUB_DIR_DEBUG)/$(notdir $(<:.c=.lst)) $< -o $@
+
+# C++ Debug 目标文件编译
+$(BUILD_DIR)/$(SUB_DIR_DEBUG)/%.o: %.cpp Makefile | $(BUILD_DIR)/$(SUB_DIR_DEBUG)
+	@echo ====== [Debug] C++ Source File "$<" Compiling... ====== 
+	$(C++_COMPLIER) -c $(CXXFLAGS) $(DEBUG_OPT) -g -Wa,-a,-ad,-ahlms=$(BUILD_DIR)/$(SUB_DIR_DEBUG)/$(notdir $(<:.cpp=.lst)) $< -o $@
+
+# Debug 资源脚本文件编译
+$(BUILD_DIR)/$(SUB_DIR_DEBUG)/%.o: %.rc Makefile | $(BUILD_DIR)/$(SUB_DIR_DEBUG)
+	@echo ====== [Debug] Windows Resource Script File "$<" Compiling... ====== 
+	$(WIN_RES_COMPLIER) $(foreach path,$(WIN_RESOURCE_INCLUDES_PATHS),$(addprefix -I,$(path))) $< -o $@
+
 
 # 依赖关系
--include $(wildcard $(BUILD_DIR)/*.d)
+-include $(wildcard $(BUILD_DIR)/$(SUB_DIR_RELEASE)*.d)
+-include $(wildcard $(BUILD_DIR)/$(SUB_DIR_DEBUG)*.d)
