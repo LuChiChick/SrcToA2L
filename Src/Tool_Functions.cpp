@@ -367,8 +367,6 @@ variable_info solve_variable_info(const char *code_line_str)
                     info.element_count = info.element_count * 10 + buff[n] - '0';
                 else
                 {
-                    // 处理宏定义常量,暂时将不支持的量定义为1
-
                     // 提取宏字符串
                     char define_str[VARIABLE_NAME_STR_LENGTH_MAX] = {'\0'};
                     for (int count = 0; count < VARIABLE_NAME_STR_LENGTH_MAX; count++)
@@ -389,7 +387,7 @@ variable_info solve_variable_info(const char *code_line_str)
                         }
                         target_define_node = target_define_node->p_next;
                     }
-                    // 遍历完成但没有找到
+                    // 遍历完成但没有找到,元素长度设置为0
                     if (target_define_node == nullptr)
                     {
                         // printf("\n");
@@ -404,7 +402,7 @@ variable_info solve_variable_info(const char *code_line_str)
             break;
         }
 
-        if (buff[count] == ' ' || buff[count] == '=' || buff[count] == ';') // 是单个变量
+        if (buff[count] == '\0' || buff[count] == '=' || buff[count] == ';') // 是单个变量
         {
             info.element_count = 1;
             break;

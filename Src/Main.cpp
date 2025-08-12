@@ -14,10 +14,10 @@ extern "C"
 int main(int argc, char *argv[])
 {
     printf("\n\n");
-    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.4");
+    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.5");
     log_printf(LOG_SYS_INFO, "Auther: LuChiChick");
     log_printf(LOG_SYS_INFO, "%s\n%s\n%s\n\n", "Open source links:",
-               "                              ├─Github:              https://git.luchichick.cn/LuChiChick/SrcToA2L",
+               "                              ├─Github:              https://github.com/LuChiChick/SrcToA2L",
                "                              └─Personal Git System: https://git.luchichick.cn/LuChiChick/SrcToA2L");
 
     log_printf(LOG_SYS_INFO, "Start argument solve.\n\n");
