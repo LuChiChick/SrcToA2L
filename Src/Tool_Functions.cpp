@@ -729,9 +729,9 @@ void f_print_calibration(FILE *file, variable_info v_info)
     if (start_addr_32 != 0 || input_map_file == nullptr)
     {
         if (v_info.element_count > 1)
-            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s[%d]", "Calibration", type_str[v_info.type], start_addr_32, v_info.name_str, v_info.element_count);
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X+%08X    %s[%d]", "Calibration", type_str[v_info.type], start_addr_32, addr_offset, v_info.name_str, v_info.element_count);
         else
-            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s", "Calibration", type_str[v_info.type], start_addr_32, v_info.name_str);
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X+%08X    %s", "Calibration", type_str[v_info.type], start_addr_32, addr_offset, v_info.name_str);
     }
     else
     {
@@ -914,16 +914,16 @@ void f_print_measurement(FILE *file, variable_info v_info)
     if (start_addr_32 != 0 || input_map_file == nullptr)
     {
         if (v_info.element_count > 1)
-            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s[%d]", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str, v_info.element_count);
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X+%08X    %s[%d]", "Measurement", type_str[v_info.type], start_addr_32, addr_offset, v_info.name_str, v_info.element_count);
         else
-            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X    %s", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str);
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_SUCCESS, "%-15s %-15s 0x%08X+%08X    %s", "Measurement", type_str[v_info.type], start_addr_32, addr_offset, v_info.name_str);
     }
     else
     {
         if (v_info.element_count > 1)
-            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X    %s[%d]", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str, v_info.element_count);
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X+%08X    %s[%d]", "Measurement", type_str[v_info.type], start_addr_32, addr_offset, v_info.name_str, v_info.element_count);
         else
-            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X    %s", "Measurement", type_str[v_info.type], start_addr_32, v_info.name_str);
+            log_printf(v_info.type == TYPE_UNKNOWN ? LOG_FAILURE : LOG_WARN, "%-15s %-15s 0x%08X+%08X    %s", "Measurement", type_str[v_info.type], start_addr_32, addr_offset, v_info.name_str);
     }
 }
 

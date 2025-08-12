@@ -16,10 +16,10 @@ void solve_types(void);
 // 记录布局解析（标定量使用）
 void solve_record_layout(void);
 
-// 处理中间件
-void solve_middleware(void);
+// 处理标定量和观测量
+void solve_calibrations_and_measurements(void);
 
-// 处理最终A2L输出
-void solve_A2L_output(void);
+// 处理最终A2L合并输出
+void solve_A2L_merge(void);
 
 #endif

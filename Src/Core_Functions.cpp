@@ -930,8 +930,8 @@ void solve_record_layout(void)
     }
 }
 
-// 处理中间件
-void solve_middleware(void)
+// 处理标定量和观测量
+void solve_calibrations_and_measurements(void)
 {
     // 抬头输出
     bool head_output = false;
@@ -1010,8 +1010,8 @@ void solve_middleware(void)
         fprintf(output_middleware_file, "\r\n\r\n%s\r\n\r\n", END_OF_GENERATED_CALIBRATION_AND_MEASURMENT_STR);
 }
 
-// 处理最终A2L输出
-void solve_A2L_output(void)
+// 处理最终A2L合并输出
+void solve_A2L_merge(void)
 {
     // 回到文件起始
     fseek(input_reference_A2L_file, 0, SEEK_SET);

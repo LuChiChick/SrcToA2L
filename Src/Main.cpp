@@ -14,7 +14,7 @@ extern "C"
 int main(int argc, char *argv[])
 {
     printf("\n\n");
-    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.3");
+    log_printf(LOG_SYS_INFO, "SrcToA2L Ver1.4");
     log_printf(LOG_SYS_INFO, "Auther: LuChiChick");
     log_printf(LOG_SYS_INFO, "%s\n%s\n%s\n\n", "Open source links:",
                "                              ├─Github:              https://git.luchichick.cn/LuChiChick/SrcToA2L",
@@ -35,22 +35,25 @@ int main(int argc, char *argv[])
     log_printf(LOG_SYS_INFO, "Start compound type definition solve.\n\n");
     solve_types();
 
-    // 处理记录布局
-    printf("\n\n");
-    log_printf(LOG_SYS_INFO, "Start record layout solve.\n\n");
-    solve_record_layout();
+    // 中间件处理
+    {
+        // 处理记录布局
+        printf("\n\n");
+        log_printf(LOG_SYS_INFO, "Start record layout solve.\n\n");
+        solve_record_layout();
 
-    // 处理中间件
-    printf("\n\n");
-    log_printf(LOG_SYS_INFO, "Start calibration and measurement solve.\n\n");
-    solve_middleware();
+        // 处理标定量和观测量
+        printf("\n\n");
+        log_printf(LOG_SYS_INFO, "Start calibrations and measurements solve.\n\n");
+        solve_calibrations_and_measurements();
+    }
 
     // 处理最终输出
     if (input_reference_A2L_file != nullptr)
     {
         printf("\n\n");
         log_printf(LOG_SYS_INFO, "Start merging middleware into reference A2L file.\n\n");
-        solve_A2L_output();
+        solve_A2L_merge();
     }
 
     log_printf(LOG_SYS_INFO, "Done.");
