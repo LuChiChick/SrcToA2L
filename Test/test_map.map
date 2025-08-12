@@ -1,0 +1,21 @@
+Host OS:	Windows
+ELXR: Copyright (C) 1983-2021 Green Hills Software.  All Rights Reserved.
+Release: Compiler v2021.1.5
+Build Directory: [Directory] runecraft1:/export/build_2021_1_bto/2021-04-25.1900-2021_1_bto/win64-cross-linux86-comp
+Revision: [VCInfo] http://toolsvc/branches/release-branch-2021-1-bto/src@696881 (built by build)
+Revision Date: Mon Apr 26 11:01:28 2021
+
+Release Date: Mon Apr 26 12:58:24 2021
+
+
+
+
+Load Map Thu May 15 13:39:19 2025
+Global Symbols (sorted numerically)
+
+ .ds0_custom      00e21864+000001   _c_u8
+ .ds0_custom      00e21865+000002   _c_u16
+ .ds0_custom      00e21867+000004   _c_float
+ .ds0_custom      00e2186B+000008   _m_double
+ .ds0_custom      00e21873+000004   _m_u16
+ .ds0_custom      00e21877+000020   _S

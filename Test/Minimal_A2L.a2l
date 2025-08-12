@@ -1,0 +1,6 @@
+/begin PROJECT Minimal_A2L "Minimal_A2L"
+    /begin MODULE TestECU ""
+
+
+    /end MODULE
+/end PROJECT
