@@ -40,13 +40,13 @@ Test_Struct S[VALUE_S];
 在 `Test` 目录下准备了一些测试用的文件，使用终端运行如下指令即可将 `.c`、`.h` 中标记段内容解析为对应的观测量、标定量：
 
 ```shell
-SrcToA2L.exe .\Test\source_code.h .\Test\source_code.c -r .\Test\Minimal_A2L.a2l -m test_map.map
+SrcToA2L.exe .\Test\typedef.h .\Test\source_code.c -r .\Test\Minimal_A2L.a2l -m .\Test\test_map.map
 ```
 
 其中，紧跟着 `-r` 与 `-m` 后的参数分别指定了要合并写入的A2L文件与用于查找地址的map文件，命令执行完成后会在传入的A2L文件所在目录生成中间件与合并后的A2L文件，但 `-r` 与 `-m` 并不是必要的，你也可以只执行如下命令：
 
 ```shell
-SrcToA2L.exe .\Test\source_code.h .\Test\source_code.c
+SrcToA2L.exe .\Test\typedef.h .\Test\source_code.c
 ```  
 
 这条指令将仅从传入的源文件、头文件中提取需要生成的内容，并将结果输出到当前调用命令行的工作目录下生成的临时中间件 `Middleware.txt`； 
