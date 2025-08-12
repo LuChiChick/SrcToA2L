@@ -13,7 +13,10 @@
 
 工具支持结构体类型解析（内嵌结构体成员的结构体除外）、地址匹配、4字节地址对齐、常量宏定义识别、记录布局补全；
 ## 如何使用
-首先需要进行一些准备，工具需要知道你要将哪些内容生成为标定量，哪些内容生成为观测量，为此你需要按照如下示例将特定的标记段插入原始代码中：  
+
+你可以在仓库的Release处找到已经预构建好的可执行文件，也可以自行构建；  
+
+工具需要知道你要将哪些内容生成为标定量，哪些内容生成为观测量，为此你需要按照如下示例将特定的标记段插入原始代码中：  
 
 ```c
 // .\Test\source_code.c
@@ -103,14 +106,15 @@ variable_type_enum solve_variable_type(const char *type_str)...
 #define VALUE_3 VALUE_1          // X
 ```
 ## 关于构建
-本仓库所使用的构建环境为:  
-[mingw-w64\i686-14.2.0-release-win32-dwarf-ucrt-rt_v12-rev2](https://github.com/niXman/mingw-builds-binaries/releases/tag/14.2.0-rt_v12-rev2)  
+本仓库所使用的构建平台及环境为如下:  
+OS：Windows11 Professional 24H2 (26100.4652)  
+Tool Chain：[mingw-w64\i686-14.2.0-release-win32-dwarf-ucrt-rt_v12-rev2](https://github.com/niXman/mingw-builds-binaries/releases/tag/14.2.0-rt_v12-rev2)  
 
 构建关系由 `Makefile` 组织，使用 `C17`、`C++17` 标准，但由于并未使用高级特性，构建标准可自行调整（按理说 `C98`、`C++98` 应该也行）；  
 
 完善构建环境后，在工作目录下使用 `make`、`mingw32-make` 即可进行构建；
 
-**Linux环境下也可以进行构建，但需要对 `Makefile` 进行少量修改**；
+本工具仅使用标准库，完全具备跨平台支持，但在其他平台、环境下需要对 `Makefile` 进行少量修改；
 
 ## 主要目录及说明
     Git-Storage        本仓库目录
