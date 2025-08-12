@@ -9,12 +9,11 @@
             "program": "${workspaceFolder}\\Build\\SrcToA2L.exe", // 调试目标
             "args": [ // 附加参数
                 ".\\Test\\typedef.h",
-                ".\\Inc\\Type_Descriptions.hpp",
-                ".\\Test\\input.c",
+                ".\\Test\\source_code.c",
                 "-r",
-                ".\\Test\\PVER.a2l",
+                ".\\Test\\Minimal_A2L.a2l",
                 "-m",
-                ".\\Test\\PVER.map",
+                ".\\Test\\test_map.map",
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}", // 工作目录
