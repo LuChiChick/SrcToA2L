@@ -36,7 +36,9 @@ void solve_args(int argc, char *argv[])
 
                 size_t value = 0;
                 sscanf(argv[count + 1], "%u", &value);
-                if ((value % 2 == 0 && value != 0) || value == 1)
+
+                // 利用2进制中2的整次幂仅有1位为1判定是否为合法字节对齐
+                if ((value & (value - 1)) == 0 && value != 0)
                 {
                     log_printf(LOG_SUCCESS, "Alignment size set to %u.", value);
                     addr_alignment_size = value;
