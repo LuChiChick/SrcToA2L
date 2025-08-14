@@ -73,7 +73,7 @@ SrcToA2L.exe .\Test\typedef.h .\Test\source_code.c
 
 此外，由于嵌入式平台对类型长度敏感，**本工具仅支持部分`stdint.h`中字节长度固定的标准类型，并将部分常用类型解析为固定长度**，如下所示：
 ```c++
-// Src/Tool_Functions.cpp
+// .\Inc\Type_Descriptions.hpp
 
 typedef enum
 {
@@ -93,7 +93,7 @@ typedef enum
 
 类型匹配详情可以在以下函数中查看，你也可以修改这个函数以支持更多的类型：  
 ```c++
-// Src/Tool_Functions.cpp
+// .\Src\Tool_Functions.cpp
 
 // 解析变量类型
 variable_type_enum solve_variable_type(const char *type_str)...
