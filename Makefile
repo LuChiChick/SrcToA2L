@@ -178,13 +178,13 @@ $(BUILD_DIR)/$(SUB_DIR_DEBUG): | $(BUILD_DIR)
 # Release 最终可执行文件编译任务
 $(BUILD_DIR)/$(SUB_DIR_RELEASE)/$(TARGET_FILE_NAME).exe: $(RELEASE_OBJECTS)
 	@echo ====== [Release] All File Compiled. Now Linking... ====== 
-	$(C++_COMPLIER) $(RELEASE_OBJECTS) -o $@ $(LIB_LINK) $(LDFLAGS)
+	$(C++_COMPLIER) $(RELEASE_OBJECTS) -static -o $@ $(LIB_LINK) $(LDFLAGS)
 	@echo ====== [Release] Program Link Finished ======
 
 # Debug 最终可执行文件编译任务
 $(BUILD_DIR)/$(SUB_DIR_DEBUG)/$(TARGET_FILE_NAME).exe: $(DEBUG_OBJECTS)
 	@echo ====== [Debug] All File Compiled. Now Linking... ====== 
-	$(C++_COMPLIER) $(DEBUG_OBJECTS) -o $@ $(LIB_LINK) $(LDFLAGS)
+	$(C++_COMPLIER) $(DEBUG_OBJECTS) -static -o $@ $(LIB_LINK) $(LDFLAGS)
 	@echo ====== [Debug] Program Link Finished ====== 
 
 # C Release 目标文件编译
@@ -219,5 +219,5 @@ $(BUILD_DIR)/$(SUB_DIR_DEBUG)/%.o: %.rc Makefile | $(BUILD_DIR)/$(SUB_DIR_DEBUG)
 
 
 # 依赖关系
--include $(wildcard $(BUILD_DIR)/$(SUB_DIR_RELEASE)*.d)
--include $(wildcard $(BUILD_DIR)/$(SUB_DIR_DEBUG)*.d)
+-include $(RELEASE_OBJECTS:.o=.d)
+-include $(DEBUG_OBJECTS:.o=.d)
